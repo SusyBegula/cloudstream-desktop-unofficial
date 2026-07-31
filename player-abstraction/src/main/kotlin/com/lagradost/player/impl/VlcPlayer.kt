@@ -194,8 +194,9 @@ class VlcPlayer : MediaPlayer {
                     if (File(it).exists()) return it
                 }
                 listOf(
-                    "/Applications/VLC.app/Contents/MacOS/VLC",
+                    "/usr/bin/vlc",
                     "/usr/local/bin/vlc",
+                    "/Applications/VLC.app/Contents/MacOS/VLC",
                     "/opt/homebrew/bin/vlc",
                 ).forEach { if (File(it).exists()) return it }
             }

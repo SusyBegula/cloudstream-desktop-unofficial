@@ -5,6 +5,32 @@ import com.sun.jna.Library
 import com.sun.jna.Native
 import com.sun.jna.Pointer
 
+interface CLibrary : Library {
+    fun setlocale(category: Int, locale: String?): String?
+
+    companion object {
+        val INSTANCE: CLibrary? by lazy {
+            try {
+                val isWin = System.getProperty("os.name").lowercase().contains("win")
+                Native.load(if (isWin) "msvcrt" else "c", CLibrary::class.java) as CLibrary
+            } catch (_: Throwable) {
+                null
+            }
+        }
+        const val LC_ALL = 0
+        const val LC_NUMERIC = 1
+
+        fun initLocale() {
+            try {
+                INSTANCE?.setlocale(LC_ALL, "C")
+                INSTANCE?.setlocale(LC_NUMERIC, "C")
+            } catch (e: Throwable) {
+                AppLogger.w("Failed to set C locale for MPV: ${e.message}")
+            }
+        }
+    }
+}
+
 interface MpvLibrary : Library {
     fun mpv_create(): Pointer?
     fun mpv_initialize(handle: Pointer): Int
@@ -15,7 +41,8 @@ interface MpvLibrary : Library {
 
     companion object {
         val INSTANCE: MpvLibrary by lazy {
-            val targets = listOf("libmpv-2", "mpv-2", "mpv-1", "mpv", "libmpv", "libmpv.so.1", "libmpv.so.2", "mpv-3.dll")
+            CLibrary.initLocale()
+            val targets = listOf("mpv", "libmpv.so.2", "libmpv.so.1", "libmpv.so", "libmpv-2", "mpv-2", "mpv-1", "libmpv", "mpv-3.dll")
             var loaded: MpvLibrary? = null
             for (target in targets) {
                 try {

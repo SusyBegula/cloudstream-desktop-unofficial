@@ -45,7 +45,10 @@ dependencies {
 
 application {
     mainClass.set("PluginTesterKt")
-    applicationDefaultJvmArgs = listOf("-Djava.security.manager=allow")
+    val javaMajor = JavaVersion.current().majorVersion.toIntOrNull() ?: 21
+    if (javaMajor < 24) {
+        applicationDefaultJvmArgs = listOf("-Djava.security.manager=allow")
+    }
 }
 
 tasks.named<JavaExec>("run") {
