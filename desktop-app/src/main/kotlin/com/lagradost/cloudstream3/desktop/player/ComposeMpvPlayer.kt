@@ -118,7 +118,7 @@ fun ComposeMpvPlayer(
                 }
                 mpvHandle = handle
 
-                lib.mpv_set_option_string(handle, "osc", "no")
+                lib.mpv_set_option_string(handle, "osc", "yes")
                 lib.mpv_set_option_string(handle, "vo", "gpu")
 
                 val isLinux = !isWindows && System.getProperty("os.name").lowercase().let { it.contains("nix") || it.contains("nux") }
