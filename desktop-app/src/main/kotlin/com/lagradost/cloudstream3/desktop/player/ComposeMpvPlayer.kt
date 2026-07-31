@@ -121,6 +121,12 @@ fun ComposeMpvPlayer(
                 lib.mpv_set_option_string(handle, "osc", "no")
                 lib.mpv_set_option_string(handle, "vo", "gpu")
 
+                val isLinux = !isWindows && System.getProperty("os.name").lowercase().let { it.contains("nix") || it.contains("nux") }
+                if (isLinux) {
+                    // Force X11 context so --wid embedding works under Wayland/XWayland (Wayland native context ignores --wid)
+                    lib.mpv_set_option_string(handle, "gpu-context", "x11egl")
+                }
+
                 // Apply User Settings & Logging
                 PlayerConfig.applyMpvSettings(handle, lib)
 
