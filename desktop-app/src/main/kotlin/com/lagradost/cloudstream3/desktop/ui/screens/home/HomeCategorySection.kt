@@ -98,16 +98,6 @@ fun HomeCategorySection(
             .alpha(alpha)
             .offset(x = offsetX),
     ) {
-        if (!isFirstPage) {
-            Text(
-                text = pageData.name,
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.padding(start = 16.dp, top = 24.dp, bottom = 8.dp),
-            )
-        }
-
         if (isLoading) {
             Box(modifier = Modifier.fillMaxWidth().height(150.dp), contentAlignment = Alignment.Center) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -127,11 +117,12 @@ fun HomeCategorySection(
                     afterHeroContent()
                 } else {
                     val isLoop = section.list.size >= 4
+                    val categoryTitle = section.name.ifBlank { pageData.name }
                     CategoryRowWithHeader(
-                        title = section.name.takeIf { it.isNotBlank() && !it.equals(pageData.name, ignoreCase = true) } ?: "",
+                        title = categoryTitle,
                         itemCount = section.list.size,
                         isInfinite = isLoop,
-                        onViewAll = { onViewAll(provider, section.name, section.list) },
+                        onViewAll = { onViewAll(provider, categoryTitle, section.list) },
                     ) {
                         items(if (isLoop) Int.MAX_VALUE else section.list.size) { index ->
                             val itemIndex = if (isLoop) index % section.list.size else index
