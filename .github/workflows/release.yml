@@ -1,4 +1,4 @@
-name: Build and Release MSI
+name: Build and Release
 
 on:
   push:
@@ -9,35 +9,106 @@ permissions:
   contents: write
 
 jobs:
-  build:
+  # ─────────────────────────── Windows (MSI) ───────────────────────────
+  build-windows:
+    name: Build Windows MSI
     runs-on: windows-latest
 
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-    - name: Set up JDK 21
-      uses: actions/setup-java@v4
-      with:
-        java-version: '21'
-        distribution: 'temurin'
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
 
-    - name: Setup Gradle
-      uses: gradle/actions/setup-gradle@v3
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
 
-    - name: Download and inject libmpv-2.dll
-      shell: pwsh
-      run: |
-        New-Item -ItemType Directory -Force -Path "desktop-app/appResources/windows/mpv"
-        Write-Host "Downloading libmpv-2.dll..."
-        Invoke-WebRequest -Uri "https://github.com/shinchiro/mpv-winbuild-cmake/releases/download/20231224/mpv-dev-x86_64-20231224-git-0edcfd8.7z" -OutFile "mpv-dev.7z"
-        7z e mpv-dev.7z "libmpv-2.dll" -o"desktop-app/appResources/windows/mpv" -r
+      - name: Download and inject libmpv-2.dll
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path "desktop-app/appResources/windows/mpv"
+          Write-Host "Downloading libmpv-2.dll..."
+          Invoke-WebRequest -Uri "https://github.com/shinchiro/mpv-winbuild-cmake/releases/download/20231224/mpv-dev-x86_64-20231224-git-0edcfd8.7z" -OutFile "mpv-dev.7z"
+          7z e mpv-dev.7z "libmpv-2.dll" -o"desktop-app/appResources/windows/mpv" -r
 
-    - name: Build MSI Installer
-      run: ./gradlew desktop-app:packageMsi
+      - name: Build MSI Installer
+        run: ./gradlew desktop-app:packageMsi
 
-    - name: Publish Release
-      uses: softprops/action-gh-release@v2
-      with:
-        files: desktop-app/build/compose/binaries/main/msi/*.msi
-        generate_release_notes: true
+      - name: Upload Windows artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-msi
+          path: desktop-app/build/compose/binaries/main/msi/*.msi
+
+  # ──────────────────── Linux (.deb + .AppImage) ────────────────────────
+  build-linux:
+    name: Build Linux packages
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libmpv-dev \
+            libmpv2 \
+            fakeroot \
+            binutils \
+            libxrender1 \
+            libxtst6 \
+            libxi6
+
+      - name: Build .deb package
+        run: ./gradlew desktop-app:packageDeb
+
+      - name: Build .AppImage package
+        run: ./gradlew desktop-app:packageAppImage
+
+      - name: Upload Linux artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-packages
+          path: |
+            desktop-app/build/compose/binaries/main/deb/*.deb
+            desktop-app/build/compose/binaries/main/app/*.AppImage
+
+  # ──────────────────────── Publish GitHub Release ──────────────────────
+  release:
+    name: Publish GitHub Release
+    needs: [build-windows, build-linux]
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download Windows artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: windows-msi
+          path: release-assets/
+
+      - name: Download Linux artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: linux-packages
+          path: release-assets/
+
+      - name: Publish Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release-assets/**
+          generate_release_notes: true
