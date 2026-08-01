@@ -95,38 +95,51 @@ fun ComposeMpvPlayer(
 
                 if (mpvHandle != null) return // Prevent multiple initializations (multi-audio bug)
 
-                // Find MPV directory and tell JNA where to find the DLL
+                // Find MPV directory and tell JNA where to find the DLL if bundled
                 val isWindows = System.getProperty("os.name").lowercase().contains("win")
                 val mpvExe = resolveMpvExecutable(isWindows)
-                if (mpvExe == null) {
-                    onPlaybackError("MPV executable not found.")
+                val mpvDir = mpvExe?.parentFile
+                if (mpvDir != null) {
+                    System.setProperty("jna.library.path", mpvDir.absolutePath)
+                }
+
+                val lib: MpvLibrary
+                try {
+                    lib = MpvLibrary.INSTANCE
+                } catch (e: Exception) {
+                    com.lagradost.common.logging.AppLogger.e("Failed to load MPV library", e)
+                    onPlaybackError("MPV library not found. Please install mpv (e.g. pacman -S mpv).")
                     return
                 }
-                val mpvDir = mpvExe.parentFile
-                System.setProperty("jna.library.path", mpvDir.absolutePath)
 
-                val lib = MpvLibrary.INSTANCE
                 val handle = lib.mpv_create() ?: run {
                     onPlaybackError("Failed to initialize MPV Engine.")
                     return
                 }
                 mpvHandle = handle
 
-                val portableConfigDir = File(mpvDir, "portable_config")
-
-                lib.mpv_set_option_string(handle, "osc", "no")
+                lib.mpv_set_option_string(handle, "osc", "yes")
                 lib.mpv_set_option_string(handle, "vo", "gpu")
+
+                val isLinux = !isWindows && System.getProperty("os.name").lowercase().let { it.contains("nix") || it.contains("nux") }
+                if (isLinux) {
+                    // Force X11 context so --wid embedding works under Wayland/XWayland (Wayland native context ignores --wid)
+                    lib.mpv_set_option_string(handle, "gpu-context", "x11egl")
+                }
 
                 // Apply User Settings & Logging
                 PlayerConfig.applyMpvSettings(handle, lib)
 
-                if (portableConfigDir.exists()) {
-                    val configDirStr = portableConfigDir.absolutePath.replace("\\", "/")
-                    lib.mpv_set_option_string(handle, "config-dir", configDirStr)
-                    lib.mpv_set_option_string(handle, "config", "yes")
-                    lib.mpv_set_option_string(handle, "load-scripts", "yes")
-                    lib.mpv_set_option_string(handle, "osd-fonts-dir", "$configDirStr/fonts")
-                    lib.mpv_set_option_string(handle, "sub-fonts-dir", "$configDirStr/fonts")
+                if (mpvDir != null) {
+                    val portableConfigDir = File(mpvDir, "portable_config")
+                    if (portableConfigDir.exists()) {
+                        val configDirStr = portableConfigDir.absolutePath.replace("\\", "/")
+                        lib.mpv_set_option_string(handle, "config-dir", configDirStr)
+                        lib.mpv_set_option_string(handle, "config", "yes")
+                        lib.mpv_set_option_string(handle, "load-scripts", "yes")
+                        lib.mpv_set_option_string(handle, "osd-fonts-dir", "$configDirStr/fonts")
+                        lib.mpv_set_option_string(handle, "sub-fonts-dir", "$configDirStr/fonts")
+                    }
                 }
 
                 val wid = com.sun.jna.Native.getComponentID(this)
@@ -312,7 +325,7 @@ fun ComposeMpvPlayer(
 }
 
 private fun resolveMpvExecutable(isWindows: Boolean): File? {
-    val names = if (isWindows) listOf("libmpv-2.dll") else listOf("libmpv.so", "libmpv.dylib")
+    val names = if (isWindows) listOf("libmpv-2.dll") else listOf("libmpv.so.2", "libmpv.so.1", "libmpv.so", "libmpv.dylib")
     
     val resDir = System.getProperty("compose.application.resources.dir")
     

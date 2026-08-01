@@ -239,30 +239,16 @@ private fun DockItem(
 
 
 
-    Column(
+    Box(
         modifier = Modifier
-            .fillMaxWidth()
-            .height(64.dp)
-            .clip(RoundedCornerShape(10.dp))
+            .size(48.dp)
+            .clip(RoundedCornerShape(12.dp))
             .background(bgColor)
             .hoverable(itemInteraction)
             .clickable(onClick = onClick),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
+        contentAlignment = Alignment.Center,
     ) {
         Icon(icon, contentDescription = label, tint = iconTint, modifier = Modifier.size(24.dp))
-        
-        if (isHovered) {
-            Spacer(Modifier.height(4.dp))
-            Text(
-                text = label,
-                color = if (selected) theme.TextPrimary else theme.TextMuted,
-                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
-                fontSize = 11.sp,
-                maxLines = 1,
-                overflow = androidx.compose.ui.text.style.TextOverflow.Clip,
-            )
-        }
     }
 }
 

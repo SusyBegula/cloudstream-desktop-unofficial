@@ -1,115 +1,103 @@
 # CloudStream Desktop (Unofficial Client)
 
-> *"This entire repository is purely vibecoded. Not one line of code here was actually written by a human lol. It's basically a duct-tape edition that somehow works, and I don't have the tiniest idea how this is working."*
+[![Platform: Linux & Windows](https://img.shields.io/badge/Platform-Linux%20%7C%20Windows-blue?style=for-the-badge&logo=linux)](https://github.com)
+[![Kotlin](https://img.shields.io/badge/Kotlin-2.0+-7F52FF?style=for-the-badge&logo=kotlin)](https://kotlinlang.org)
+[![Compose Desktop](https://img.shields.io/badge/Compose%20Multiplatform-1.7+-4285F4?style=for-the-badge&logo=jetpackcompose)](https://www.jetbrains.com/lp/compose-multiplatform/)
+[![JDK Compatibility](https://img.shields.io/badge/JDK-21%20--%2026-007396?style=for-the-badge&logo=openjdk)](https://openjdk.org)
 
-Welcome to the **CloudStream Desktop** project.
-
-This is a native Compose for Desktop application designed to run CloudStream Android plugins natively on a desktop JVM environment, without requiring an Android emulator.
-
-## ⚠️ Disclaimer & No Guarantees
-
-**This is an independent, unofficial experiment.** 
-This project is **not** endorsed by, associated with, or maintained by the original CloudStream developers. It was built as a proof-of-concept to validate the execution of Android-specific plugins within a desktop JVM environment.
-
-**No Guarantees Provided:** 
-There is no guarantee of ongoing maintenance, bug fixes, or future updates for this repository. The codebase is provided "as is," without warranty of any kind. Users are encouraged to fork, modify, and improve the codebase independently.
-
-## 📜 DMCA Notice
-
-**This repository acts purely as a blank-slate media shell.** 
-The application does not ship with any plugins, media files, or pre-configured content sources. Everything must be explicitly installed and configured by the user at their own discretion. The developers of this application do not host, distribute, or control any content, and hold no responsibility or liability for how users choose to utilize this software.
-
-## 🛠 Architecture Overview
-
-The repository is structured with strict modularity to ensure maintainability and separation of concerns.
-
-```text
-cloudstream-windows-workspace/
-├── android-reference/           # Git Submodule pointing directly to the official CloudStream Android repository
-├── android-stubs/               # "The Stubs": Fake Android APIs (Context, Log, Uri) mocked for the JVM
-├── common/                      # Shared data models and logging interfaces
-├── library/                     # Wrapper module connecting android-reference for the desktop JVM
-├── player-abstraction/          # Pure Kotlin definitions for Video Player IPC and JNA bridges
-├── plugin-runtime/              # Isolated ClassLoaders specifically for booting .cs3 Android plugins
-├── plugin-sandbox/              # Testing environment for validating plugins against the Android stubs
-├── desktop-app/                 # The main Kotlin/Compose Multiplatform desktop module
-│   ├── build.gradle.kts         # Gradle build script for the desktop app
-│   └── src/main/kotlin/com/lagradost/cloudstream3/desktop/
-│       ├── Main.kt              # Clean 70-line application bootstrapper
-│       ├── init/                # Bootstrap initialization logic (Network, Security, Proxy, Plugins)
-│       ├── data/                # Data storage, app settings, and repos
-│       ├── logic/               # MVVM ViewModels handling business logic without touching UI
-│       ├── network/             # Network configuration enforcing DNS-over-HTTPS (DoH) privacy
-│       ├── player/              # Compose Embedded MPV (JNA) and external player abstractions
-│       ├── repo/                # Repository Manager for handling third-party extensions
-│       ├── storage/             # DesktopDataStore for cross-platform JSON configuration saving
-│       └── ui/                  # Jetpack Compose for Desktop UI Components
-│           ├── components/      # Reusable, stateless UI widgets (ExtensionCard, ProgressIndicators)
-│           ├── navigation/      # Stack-based screen router
-│           ├── screens/         # Top-level feature views (Home, Details, extensions/* tabs)
-│           └── theme/           # Unified appearance tokens and DesktopTheme configuration
-├── build.gradle.kts             # Root Gradle build script
-└── settings.gradle.kts          # Root settings
-```
-
-### Component Breakdown
-
-#### 1. Core Library Isolation (`android-reference` & `:library`)
-The architecture relies on a Git Submodule (`android-reference`) pointing directly to the official CloudStream Android repository. This ensures that the upstream scraping logic remains completely unmodified. The `:library` module acts as a wrapper, exposing the upstream parsing engine to the desktop JVM while keeping the desktop UI strictly decoupled from the core logic.
-
-#### 2. The Android Stubs (`:android-stubs`)
-CloudStream plugins are compiled against the Android SDK. Running them natively on a desktop JVM would normally result in `ClassNotFoundException` errors. The `:android-stubs` module provides mock JVM implementations of core Android classes (e.g., `Context`, `Log`, `Uri`), allowing the Dalvik bytecode to execute seamlessly on Windows.
-
-#### 3. The Plugin Runtime Sandbox (`:plugin-runtime`)
-To safely execute third-party Dalvik bytecode, the `plugin-runtime` converts `.cs3` Dalvik bytecode to JVM bytecode via `dex2jar` at runtime. A `PluginSecurityVerifier` then performs static ASM bytecode analysis before the plugin is loaded — if it detects calls to dangerous APIs (`java.lang.Runtime`, `java.io.File`, `ProcessBuilder`), the plugin is rejected outright and never executed.
-
-#### 4. Embedded Hardware-Accelerated Video Playback (`:player-abstraction`)
-Video playback is handled via an Embedded MPV Engine. The `:player-abstraction` module uses JNA (Java Native Access) to dynamically link into `libmpv-2.dll`, rendering hardware-accelerated video directly into a Compose `SwingPanel`.
-
-## 🚀 Setup & Installation
-
-### For End Users
-Simply download the [latest pre-alpha `.msi` installer](https://github.com/errorcode26/cloudstream-desktop-unofficial/releases/tag/v0.1-alpha) and double-click it. Everything is pre-bundled (including the hardware-accelerated video player). There is absolutely zero configuration required.
-
-> 🛡️ **Security:** The official `.msi` release has been scanned and verified. View the [VirusTotal Scan Results](https://www.virustotal.com/gui/file/8bbcc169fafb0eac3ba7fa426aefc1997a748a2f6b812550e57140be7c460324?nocache=1).
+**CloudStream Desktop** is a native Compose Multiplatform desktop JVM port of [CloudStream 3](https://github.com/recloudstream/cloudstream), designed to run `.cs3` Dalvik plugins natively on Linux and Windows without requiring an Android emulator.
 
 ---
 
-### For Developers (Building from Source)
+## 🚀 Key Features & Linux Port Enhancements
 
-**1. Prerequisites:**
-- **JDK 21 or higher** (The codebase targets Java 21)
-- **Git** (Required for submodule cloning)
+- **Cross-Platform Support:** Fully ported and optimized for Linux (tested on Arch Linux under Wayland & Hyprland) and Windows.
+- **Embedded Hardware Video Playback:** Uses `libmpv` (System `libmpv.so.2` / `libmpv.so.1` on Linux, or bundled DLL on Windows) embedded via AWT `Canvas` and JNA.
+- **Linux Wayland / Hyprland Embedding:** Uses `gpu-context=x11egl` for MPV window embedding (`--wid`) under XWayland, preventing MPV from spawning external windows.
+- **C Locale Process Initializer:** Forces `LC_NUMERIC="C"` via JNA `setlocale` to prevent native `libmpv` initialization failures on non-C system locales.
+- **JDK 21–26+ Compatibility:** Safe execution on JDK 24+ (e.g. OpenJDK 26) with conditional SecurityManager handling following JEP 486.
+- **Playwright Cloudflare Bypass:** Integrated Playwright driver with platform-aware driver stripping (`stripPlaywrightDriver` task) to keep distribution packages optimized (reducing bundle size from 206MB down to 125MB).
+- **Linux Packaging:** Built-in Gradle distribution tasks for `.deb` and `.AppImage` packages.
 
-**2. Cloning the Repository:**
-To clone the repository properly (including the Android submodule):
-```bash
-git clone --recursive https://github.com/YourUsername/cloudstream-windows.git
-cd cloudstream-windows
+---
+
+## 🛠 Architecture Overview
+
+```text
+cloudstream-desktop-unofficial/
+├── android-reference/           # Submodule pointing to official CloudStream Android core
+├── android-stubs/               # Mocked Android APIs (Context, Log, Uri, Intent) for plain JVM
+├── common/                      # Shared data models, storage utilities, and logging interfaces
+├── library/                     # Wrapper module exposing upstream scrapers to desktop JVM
+├── player-abstraction/          # Pure Kotlin Video Player IPC & JNA MPV/VLC bridges
+├── plugin-runtime/              # Runtime dex2jar converter & PluginSecurityVerifier (ASM analyzer)
+├── plugin-sandbox/              # Testing environment for validating Dalvik bytecode
+└── desktop-app/                 # Main Compose Multiplatform Desktop Application
+    ├── src/main/kotlin/com/lagradost/cloudstream3/desktop/
+    │   ├── Main.kt              # App entry point (Interop blending & Bootstrap initializer)
+    │   ├── init/                # Startup logic (Network, Security, Proxy, Plugins, Auto-Updater)
+    │   ├── logic/               # MVVM ViewModels handling business logic
+    │   ├── network/             # DNS-over-HTTPS (DoH) & NiceHttp network clients
+    │   ├── player/              # ComposeMpvPlayer & MpvLibrary (JNA bindings)
+    │   ├── repo/                # Third-party plugin repository manager
+    │   ├── storage/             # DesktopDataStore JSON configuration manager
+    │   └── ui/                  # Jetpack Compose for Desktop screens & Netflix player UI
+    └── build.gradle.kts         # Gradle build script with Linux DEB/AppImage packaging
 ```
+
+---
+
+## 📦 Building & Running
+
+### Prerequisites
+- **JDK 21 or higher** (Targeting JDK 21+ / JDK 26).
+- **Git** (Required for cloning submodules).
+- **MPV:** On Linux, install `mpv` via your system package manager (e.g., `sudo pacman -S mpv` on Arch Linux, or `sudo apt install libmpv-dev` on Ubuntu/Debian).
+
+### 1. Clone the Repository
+Always clone with `--recursive` to fetch the `android-reference` submodule:
+```bash
+git clone --recursive https://github.com/SusyBegula/cloudstream-desktop-unofficial.git
+cd cloudstream-desktop-unofficial
+```
+
 > [!WARNING]  
-> **DO NOT DOWNLOAD THIS REPOSITORY AS A ZIP FILE.** GitHub ZIP downloads do not include Git Submodules. The `android-reference` directory will be empty, causing immediate build failures. You **must** use `git clone --recursive`.
+> **DO NOT download as a ZIP file** from GitHub, as ZIP downloads exclude submodules and will cause compilation failures in `:library`.
 
-**3. The Video Engine Configuration:**
-Since GitHub blocks files larger than 100MB, the `libmpv-2.dll` is not checked into this repository. You must provide it yourself.
-- Download the Windows MPV binaries (ensure it includes `libmpv-2.dll`).
-- Place the core `libmpv-2.dll` directly inside the `desktop-app/appResources/windows/mpv/` directory of the project workspace.
-
-**4. Building for Local Testing:**
-To compile and launch the application locally for testing and development, run the following Gradle task in your terminal:
+### 2. Run Locally in Development Mode
 ```bash
 ./gradlew desktop-app:run
 ```
-Alternatively, for Windows users, you can double-click **`launch.bat`** to run the application in Development Mode.
 
-**5. Packaging the MSI Installer:**
-To build the final standalone Windows `.msi` installer (which bundles the JRE and dependencies natively without requiring users to have Java installed), run:
+### 3. Run Unit Tests
+```bash
+./gradlew desktop-app:test
+```
+
+### 4. Package Native Linux / Windows Distributions
+
+#### **Linux (.deb & .AppImage packages):**
+```bash
+./gradlew desktop-app:packageDeb
+./gradlew desktop-app:packageAppImage
+```
+Output binaries will be generated in `desktop-app/build/compose/binaries/main/deb/` and `desktop-app/build/compose/binaries/main/appimage/`.
+
+#### **Windows (.msi installer):**
 ```bash
 ./gradlew desktop-app:packageMsi
 ```
-The compiled installer will be generated at `desktop-app/build/compose/binaries/main/msi/`.
-> [!NOTE]  
-> The Gradle script includes an automated `stripPlaywrightDriver` task. When you build the MSI, it will automatically unpack the `com.microsoft.playwright:driver-bundle` dependency, strip out the macOS and Linux Node.js binaries, and repackage it. This safely strips out redundant OS binaries without breaking Cloudflare bypassing on Windows, helping to keep the large bundled JVM + MPV installer as optimized as possible.
+Output installer will be generated in `desktop-app/build/compose/binaries/main/msi/`.
+
+---
+
+## 📜 DMCA Notice & Disclaimer
+
+**This repository acts purely as a blank-slate media player shell.**  
+The application does not ship with, host, or distribute any plugins, media files, or pre-configured content sources. Everything must be explicitly installed by the user at their own discretion. The developers hold no responsibility or liability for how users utilize this software.
+
+---
 
 ## 🙏 Acknowledgements
-Significant acknowledgement is given to the original CloudStream developers and contributors. This project utilizes their core scraping engine and extension architecture as a foundation.
+
+Acknowledgement to the original **CloudStream** project developers and contributors for their open-source Android codebase and extension architecture.

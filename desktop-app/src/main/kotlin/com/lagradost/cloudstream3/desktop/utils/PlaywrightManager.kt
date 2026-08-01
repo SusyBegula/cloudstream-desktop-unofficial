@@ -67,6 +67,11 @@ object PlaywrightManager {
             edgePaths.add(File("/usr/bin/microsoft-edge"))
             chromePaths.add(File("/usr/bin/google-chrome-stable"))
             chromePaths.add(File("/usr/bin/google-chrome"))
+            chromePaths.add(File("/usr/bin/chromium"))
+            chromePaths.add(File("/usr/bin/chromium-freeworld"))
+            chromePaths.add(File("/usr/bin/brave-browser"))
+            chromePaths.add(File("/usr/bin/brave"))
+            chromePaths.add(File("/usr/bin/vivaldi"))
         }
 
         when {
