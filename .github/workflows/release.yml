@@ -34,8 +34,15 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path "desktop-app/appResources/windows/mpv"
-          Write-Host "Downloading libmpv-2.dll..."
-          Invoke-WebRequest -Uri "https://github.com/shinchiro/mpv-winbuild-cmake/releases/download/20231224/mpv-dev-x86_64-20231224-git-0edcfd8.7z" -OutFile "mpv-dev.7z"
+          Write-Host "Fetching latest mpv release info..."
+          $release = Invoke-RestMethod -Uri "https://api.github.com/repos/shinchiro/mpv-winbuild-cmake/releases/latest"
+          $asset = $release.assets | Where-Object { $_.name -like "mpv-dev-x86_64-*.7z" -and $_.name -notlike "*v3*" } | Select-Object -First 1
+          if (-not $asset) {
+            Write-Error "Could not find mpv-dev-x86_64 asset in latest release"
+            exit 1
+          }
+          Write-Host "Downloading $($asset.name) from $($asset.browser_download_url)..."
+          Invoke-WebRequest -Uri $asset.browser_download_url -OutFile "mpv-dev.7z"
           7z e mpv-dev.7z "libmpv-2.dll" -o"desktop-app/appResources/windows/mpv" -r
 
       - name: Build MSI Installer
