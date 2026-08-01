@@ -31,6 +31,40 @@ interface CLibrary : Library {
     }
 }
 
+interface X11Library : Library {
+    interface XErrorHandler : com.sun.jna.Callback {
+        fun callback(display: Pointer?, errorEvent: Pointer?): Int
+    }
+
+    fun XSetErrorHandler(handler: XErrorHandler?): Pointer?
+
+    companion object {
+        private var handlerInstalled = false
+        private var ignoreHandlerRef: XErrorHandler? = null
+
+        fun installDummyErrorHandler() {
+            if (handlerInstalled) return
+            val isLinux = System.getProperty("os.name").lowercase().let { it.contains("nix") || it.contains("nux") }
+            if (!isLinux) return
+
+            try {
+                val x11 = Native.load("X11", X11Library::class.java) as X11Library
+                ignoreHandlerRef = object : XErrorHandler {
+                    override fun callback(display: Pointer?, errorEvent: Pointer?): Int {
+                        // Suppress non-fatal X11 errors (like BadWindow when mpv window surface is detached)
+                        return 0
+                    }
+                }
+                x11.XSetErrorHandler(ignoreHandlerRef)
+                handlerInstalled = true
+                AppLogger.i("Installed custom X11 error handler to prevent BadWindow crashes")
+            } catch (e: Throwable) {
+                AppLogger.w("Failed to install X11 error handler: ${e.message}")
+            }
+        }
+    }
+}
+
 interface MpvLibrary : Library {
     fun mpv_create(): Pointer?
     fun mpv_initialize(handle: Pointer): Int
@@ -42,6 +76,7 @@ interface MpvLibrary : Library {
     companion object {
         val INSTANCE: MpvLibrary by lazy {
             CLibrary.initLocale()
+            X11Library.installDummyErrorHandler()
             val targets = listOf("mpv", "libmpv.so.2", "libmpv.so.1", "libmpv.so", "libmpv-2", "mpv-2", "mpv-1", "libmpv", "mpv-3.dll")
             var loaded: MpvLibrary? = null
             for (target in targets) {
@@ -55,7 +90,7 @@ interface MpvLibrary : Library {
                     // Try next
                 }
             }
-            loaded ?: throw RuntimeException("Failed to load native MPV library. Please ensure mpv is installed and in your system PATH.")
+            loaded ?: throw RuntimeException("Failed to load native MPV library. Please ensure libmpv (e.g. libmpv2 on Debian/Ubuntu, mpv on Arch) is installed.")
         }
     }
 }

@@ -108,7 +108,7 @@ fun ComposeMpvPlayer(
                     lib = MpvLibrary.INSTANCE
                 } catch (e: Exception) {
                     com.lagradost.common.logging.AppLogger.e("Failed to load MPV library", e)
-                    onPlaybackError("MPV library not found. Please install mpv (e.g. pacman -S mpv).")
+                    onPlaybackError("MPV library not found. Please install libmpv (e.g. sudo apt install libmpv2 or pacman -S mpv).")
                     return
                 }
 
@@ -119,27 +119,33 @@ fun ComposeMpvPlayer(
                 mpvHandle = handle
 
                 lib.mpv_set_option_string(handle, "osc", "yes")
-                lib.mpv_set_option_string(handle, "vo", "gpu")
+                lib.mpv_set_option_string(handle, "vo", "gpu,x11")
 
                 val isLinux = !isWindows && System.getProperty("os.name").lowercase().let { it.contains("nix") || it.contains("nux") }
                 if (isLinux) {
-                    // Force X11 context so --wid embedding works under Wayland/XWayland (Wayland native context ignores --wid)
-                    lib.mpv_set_option_string(handle, "gpu-context", "x11egl")
+                    // Under Wayland / Xwayland, allow MPV to try x11egl, x11vk, or auto fallback
+                    lib.mpv_set_option_string(handle, "gpu-context", "x11egl,x11vk,auto")
                 }
 
                 // Apply User Settings & Logging
                 PlayerConfig.applyMpvSettings(handle, lib)
 
-                if (mpvDir != null) {
-                    val portableConfigDir = File(mpvDir, "portable_config")
-                    if (portableConfigDir.exists()) {
-                        val configDirStr = portableConfigDir.absolutePath.replace("\\", "/")
-                        lib.mpv_set_option_string(handle, "config-dir", configDirStr)
-                        lib.mpv_set_option_string(handle, "config", "yes")
-                        lib.mpv_set_option_string(handle, "load-scripts", "yes")
-                        lib.mpv_set_option_string(handle, "osd-fonts-dir", "$configDirStr/fonts")
-                        lib.mpv_set_option_string(handle, "sub-fonts-dir", "$configDirStr/fonts")
+                val userConfigDir = resolveUserMpvConfigDir(mpvDir)
+                if (userConfigDir != null && userConfigDir.isDirectory) {
+                    val configDirStr = userConfigDir.absolutePath.replace("\\", "/")
+                    lib.mpv_set_option_string(handle, "config-dir", configDirStr)
+                    lib.mpv_set_option_string(handle, "config", "yes")
+                    lib.mpv_set_option_string(handle, "load-scripts", "yes")
+                    val fontsDir = File(userConfigDir, "fonts")
+                    if (fontsDir.isDirectory) {
+                        val fontsDirStr = fontsDir.absolutePath.replace("\\", "/")
+                        lib.mpv_set_option_string(handle, "osd-fonts-dir", fontsDirStr)
+                        lib.mpv_set_option_string(handle, "sub-fonts-dir", fontsDirStr)
                     }
+                    com.lagradost.common.logging.AppLogger.i("Loaded MPV user config from: $configDirStr")
+                } else {
+                    lib.mpv_set_option_string(handle, "config", "yes")
+                    lib.mpv_set_option_string(handle, "load-scripts", "yes")
                 }
 
                 val wid = com.sun.jna.Native.getComponentID(this)
@@ -415,4 +421,23 @@ private fun awtKeyToMpv(e: KeyEvent): String? {
     val shift = if (e.isShiftDown && e.keyCode !in KeyEvent.VK_A..KeyEvent.VK_Z && baseKey.length > 1) "Shift+" else ""
 
     return "$ctrl$alt$shift$baseKey"
+}
+
+private fun resolveUserMpvConfigDir(mpvDir: File?): File? {
+    if (mpvDir != null) {
+        val portableConfig = File(mpvDir, "portable_config")
+        if (portableConfig.isDirectory) return portableConfig
+    }
+
+    val xdgConfig = System.getenv("XDG_CONFIG_HOME")
+    val homeDir = System.getProperty("user.home")
+
+    val candidates = listOfNotNull(
+        xdgConfig?.let { File(it, "mpv") },
+        homeDir?.let { File(it, ".config/mpv") },
+        homeDir?.let { File(it, ".mpv") },
+        System.getenv("APPDATA")?.let { File(it, "mpv") }
+    )
+
+    return candidates.firstOrNull { it.isDirectory }
 }

@@ -13,8 +13,8 @@ object PlayerConfig {
     const val PREF_AUTO_PLAY_TIMEOUT = "player_auto_play_timeout"
 
     fun applyMpvSettings(handle: Pointer, lib: MpvLibrary) {
-        // Hardware Acceleration (Default: auto-copy)
-        val hwdec = DesktopDataStore.getKey<String>(PREF_HWDEC) ?: "auto-copy"
+        // Hardware Acceleration (Default: auto-safe)
+        val hwdec = DesktopDataStore.getKey<String>(PREF_HWDEC) ?: "auto-safe"
         lib.mpv_set_option_string(handle, "hwdec", hwdec)
 
         // Subtitles Size (Default: 45)
