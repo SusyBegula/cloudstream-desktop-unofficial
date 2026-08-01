@@ -192,8 +192,9 @@ fun CategoryRowWithHeader(
 
         LazyRow(
             state = listState,
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
+            modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
+            contentPadding = PaddingValues(start = 16.dp, end = 16.dp),
             content = content,
         )
     }

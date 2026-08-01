@@ -13,10 +13,14 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.SkipNext
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -183,6 +187,9 @@ fun DetailsContent(navController: NavController, provider: MainAPI, data: LoadRe
     }
 
     var isSortAscending by remember(data.url) { mutableStateOf(true) }
+    var episodeSearchQuery by remember(data.url) { mutableStateOf("") }
+    var isSearchActive by remember(data.url) { mutableStateOf(false) }
+    val searchFocusRequester = remember { FocusRequester() }
 
     Box(modifier = Modifier.fillMaxSize()) {
         LazyColumn(state = scrollState, modifier = Modifier.fillMaxSize()) {
@@ -258,24 +265,135 @@ fun DetailsContent(navController: NavController, provider: MainAPI, data: LoadRe
                                     Spacer(modifier = Modifier.height(32.dp))
                                 }
                                 is TvSeriesLoadResponse -> {
-                                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                                        Box(modifier = Modifier.weight(1f)) {
-                                            if (seasons.isNotEmpty()) {
-                                                ScrollableTabRow(
-                                                    selectedTabIndex = seasons.indexOf(selectedSeason).coerceAtLeast(0),
-                                                    containerColor = Color.Transparent,
-                                                    edgePadding = 0.dp,
-                                                    divider = {},
+                                    // Continue Watching + Play Next buttons
+                                    if (latestHistory != null) {
+                                        val resumeEp = data.episodes.find { it.data == latestHistory.episodeId }
+                                        val epLabel = buildString {
+                                            latestHistory.season?.let { append("S$it ") }
+                                            latestHistory.episode?.let { append("E$it") }
+                                            resumeEp?.name?.let { append(" - $it") }
+                                        }.trim().ifEmpty { "Continue Watching" }
+                                        val canResume = com.lagradost.player.impl.PlayerLinkHandler.resumeStartSeconds(latestHistory.position, latestHistory.duration) > 0
+                                        val buttonLabel = if (canResume) "Continue Watching [$epLabel]" else "Play [$epLabel]"
+
+                                        // Resolve the "next" episode: next ep in same season, then first ep of next season
+                                        val currentSeason = latestHistory.season
+                                        val currentEpNum = latestHistory.episode
+                                        val sortedSeasonEps = data.episodes
+                                            .filter { it.season == currentSeason || (it.season == null && currentSeason == null) }
+                                            .sortedBy { it.episode ?: Int.MAX_VALUE }
+                                        val currentIdx = if (resumeEp != null) sortedSeasonEps.indexOf(resumeEp) else -1
+                                        val nextEpSameSeason = if (currentIdx >= 0 && currentIdx + 1 < sortedSeasonEps.size) sortedSeasonEps[currentIdx + 1] else null
+                                        val nextEp: Episode? = nextEpSameSeason ?: run {
+                                            // Try first episode of next season
+                                            val nextSeason = (currentSeason ?: 0) + 1
+                                            data.episodes
+                                                .filter { it.season == nextSeason }
+                                                .minByOrNull { it.episode ?: Int.MAX_VALUE }
+                                        }
+                                        val nextEpLabel = nextEp?.let { ep ->
+                                            buildString {
+                                                ep.season?.let { append("S$it ") }
+                                                ep.episode?.let { append("E$it") }
+                                                ep.name?.let { append(" - $it") }
+                                            }.trim()
+                                        }
+
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                        ) {
+                                            Button(
+                                                onClick = {
+                                                    val ep = resumeEp ?: data.episodes.firstOrNull()
+                                                    if (ep != null) navigateToPlay(provider, data, ep, onPlay)
+                                                },
+                                                modifier = Modifier.weight(1f).height(56.dp),
+                                                shape = RoundedCornerShape(8.dp),
+                                            ) {
+                                                Icon(Icons.Default.PlayArrow, contentDescription = "Continue Watching", tint = MaterialTheme.colorScheme.onPrimary)
+                                                Spacer(modifier = Modifier.width(6.dp))
+                                                Text(if (canResume) "Continue" else "Play", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimary, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                                            }
+                                            if (nextEp != null) {
+                                                OutlinedButton(
+                                                    onClick = { navigateToPlay(provider, data, nextEp, onPlay) },
+                                                    modifier = Modifier.weight(1f).height(56.dp),
+                                                    shape = RoundedCornerShape(8.dp),
                                                 ) {
-                                                    seasons.forEach { season ->
-                                                        Tab(
-                                                            selected = selectedSeason == season,
-                                                            onClick = { selectedSeason = season },
-                                                            text = { Text("Season $season", fontWeight = FontWeight.Bold) },
-                                                        )
+                                                    Icon(Icons.Default.SkipNext, contentDescription = "Play Next", modifier = Modifier.size(18.dp))
+                                                    Spacer(modifier = Modifier.width(6.dp))
+                                                    Text(
+                                                        text = if (!nextEpLabel.isNullOrBlank()) "Next: $nextEpLabel" else "Play Next",
+                                                        fontWeight = FontWeight.SemiBold,
+                                                        maxLines = 1,
+                                                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                                                    )
+                                                }
+                                            }
+                                        }
+
+                                        if (latestHistory.duration > 0) {
+                                            Spacer(modifier = Modifier.height(8.dp))
+                                            com.lagradost.cloudstream3.desktop.ui.components.WatchProgressIndicator(
+                                                position = latestHistory.position,
+                                                duration = latestHistory.duration,
+                                                modifier = Modifier.fillMaxWidth(),
+                                            )
+                                        }
+                                        Spacer(modifier = Modifier.height(20.dp))
+                                    }
+
+                                    // Season tabs + search + sort toolbar
+                                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                                        if (!isSearchActive) {
+                                            Box(modifier = Modifier.weight(1f)) {
+                                                if (seasons.isNotEmpty()) {
+                                                    ScrollableTabRow(
+                                                        selectedTabIndex = seasons.indexOf(selectedSeason).coerceAtLeast(0),
+                                                        containerColor = Color.Transparent,
+                                                        edgePadding = 0.dp,
+                                                        divider = {},
+                                                    ) {
+                                                        seasons.forEach { season ->
+                                                            Tab(
+                                                                selected = selectedSeason == season,
+                                                                onClick = { selectedSeason = season; episodeSearchQuery = "" },
+                                                                text = { Text("Season $season", fontWeight = FontWeight.Bold) },
+                                                            )
+                                                        }
                                                     }
                                                 }
                                             }
+                                        } else {
+                                            OutlinedTextField(
+                                                value = episodeSearchQuery,
+                                                onValueChange = { episodeSearchQuery = it },
+                                                modifier = Modifier.weight(1f).height(52.dp).focusRequester(searchFocusRequester),
+                                                placeholder = { Text("Search episodes...", style = MaterialTheme.typography.bodyMedium) },
+                                                singleLine = true,
+                                                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, modifier = Modifier.size(18.dp)) },
+                                                trailingIcon = {
+                                                    if (episodeSearchQuery.isNotEmpty()) {
+                                                        IconButton(onClick = { episodeSearchQuery = "" }) {
+                                                            Icon(Icons.Default.Close, contentDescription = "Clear", modifier = Modifier.size(16.dp))
+                                                        }
+                                                    }
+                                                },
+                                                shape = RoundedCornerShape(8.dp),
+                                                textStyle = MaterialTheme.typography.bodyMedium,
+                                            )
+                                            LaunchedEffect(isSearchActive) { if (isSearchActive) searchFocusRequester.requestFocus() }
+                                        }
+                                        IconButton(onClick = {
+                                            isSearchActive = !isSearchActive
+                                            if (!isSearchActive) episodeSearchQuery = ""
+                                        }) {
+                                            Icon(
+                                                if (isSearchActive) Icons.Default.Close else Icons.Default.Search,
+                                                contentDescription = if (isSearchActive) "Close search" else "Search episodes",
+                                                tint = if (isSearchActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                                            )
                                         }
                                         TextButton(onClick = { isSortAscending = !isSortAscending }) {
                                             Text(
@@ -289,23 +407,122 @@ fun DetailsContent(navController: NavController, provider: MainAPI, data: LoadRe
                                     Spacer(modifier = Modifier.height(16.dp))
                                 }
                                 is AnimeLoadResponse -> {
-                                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                                        Box(modifier = Modifier.weight(1f)) {
-                                            if (dubStatuses.size > 1) {
-                                                TabRow(
-                                                    selectedTabIndex = dubStatuses.indexOf(selectedDub).coerceAtLeast(0),
-                                                    containerColor = Color.Transparent,
-                                                    divider = {},
+                                    // Continue Watching + Play Next buttons for Anime
+                                    if (latestHistory != null) {
+                                        val allAnimeEpisodes = data.episodes.values.flatten()
+                                        val resumeEp = allAnimeEpisodes.find { it.data == latestHistory.episodeId }
+                                        val epLabel = buildString {
+                                            latestHistory.episode?.let { append("E$it") }
+                                            resumeEp?.name?.let { append(" - $it") }
+                                        }.trim().ifEmpty { "Continue Watching" }
+                                        val canResume = com.lagradost.player.impl.PlayerLinkHandler.resumeStartSeconds(latestHistory.position, latestHistory.duration) > 0
+                                        val buttonLabel = if (canResume) "Continue Watching [$epLabel]" else "Play [$epLabel]"
+
+                                        // Resolve next episode in same dub list
+                                        val dubEps = selectedDub?.let { data.episodes[it] }?.sortedBy { it.episode ?: Int.MAX_VALUE } ?: emptyList()
+                                        val currentIdx = if (resumeEp != null) dubEps.indexOf(resumeEp) else -1
+                                        val nextEp: Episode? = if (currentIdx >= 0 && currentIdx + 1 < dubEps.size) dubEps[currentIdx + 1] else null
+                                        val nextEpLabel = nextEp?.let { ep ->
+                                            buildString {
+                                                ep.episode?.let { append("E$it") }
+                                                ep.name?.let { append(" - $it") }
+                                            }.trim()
+                                        }
+
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                        ) {
+                                            Button(
+                                                onClick = {
+                                                    val ep = resumeEp ?: allAnimeEpisodes.firstOrNull()
+                                                    if (ep != null) navigateToPlay(provider, data, ep, onPlay)
+                                                },
+                                                modifier = Modifier.weight(1f).height(56.dp),
+                                                shape = RoundedCornerShape(8.dp),
+                                            ) {
+                                                Icon(Icons.Default.PlayArrow, contentDescription = "Continue Watching", tint = MaterialTheme.colorScheme.onPrimary)
+                                                Spacer(modifier = Modifier.width(6.dp))
+                                                Text(if (canResume) "Continue" else "Play", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimary, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                                            }
+                                            if (nextEp != null) {
+                                                OutlinedButton(
+                                                    onClick = { navigateToPlay(provider, data, nextEp, onPlay) },
+                                                    modifier = Modifier.weight(1f).height(56.dp),
+                                                    shape = RoundedCornerShape(8.dp),
                                                 ) {
-                                                    dubStatuses.forEach { dub ->
-                                                        Tab(
-                                                            selected = selectedDub == dub,
-                                                            onClick = { selectedDub = dub },
-                                                            text = { Text(dub.name, fontWeight = FontWeight.Bold) },
-                                                        )
+                                                    Icon(Icons.Default.SkipNext, contentDescription = "Play Next", modifier = Modifier.size(18.dp))
+                                                    Spacer(modifier = Modifier.width(6.dp))
+                                                    Text(
+                                                        text = if (!nextEpLabel.isNullOrBlank()) "Next: $nextEpLabel" else "Play Next",
+                                                        fontWeight = FontWeight.SemiBold,
+                                                        maxLines = 1,
+                                                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                                                    )
+                                                }
+                                            }
+                                        }
+
+                                        if (latestHistory.duration > 0) {
+                                            Spacer(modifier = Modifier.height(8.dp))
+                                            com.lagradost.cloudstream3.desktop.ui.components.WatchProgressIndicator(
+                                                position = latestHistory.position,
+                                                duration = latestHistory.duration,
+                                                modifier = Modifier.fillMaxWidth(),
+                                            )
+                                        }
+                                        Spacer(modifier = Modifier.height(20.dp))
+                                    }
+
+                                    // Dub tabs + search + sort toolbar
+                                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                                        if (!isSearchActive) {
+                                            Box(modifier = Modifier.weight(1f)) {
+                                                if (dubStatuses.size > 1) {
+                                                    TabRow(
+                                                        selectedTabIndex = dubStatuses.indexOf(selectedDub).coerceAtLeast(0),
+                                                        containerColor = Color.Transparent,
+                                                        divider = {},
+                                                    ) {
+                                                        dubStatuses.forEach { dub ->
+                                                            Tab(
+                                                                selected = selectedDub == dub,
+                                                                onClick = { selectedDub = dub; episodeSearchQuery = "" },
+                                                                text = { Text(dub.name, fontWeight = FontWeight.Bold) },
+                                                            )
+                                                        }
                                                     }
                                                 }
                                             }
+                                        } else {
+                                            OutlinedTextField(
+                                                value = episodeSearchQuery,
+                                                onValueChange = { episodeSearchQuery = it },
+                                                modifier = Modifier.weight(1f).height(52.dp).focusRequester(searchFocusRequester),
+                                                placeholder = { Text("Search episodes...", style = MaterialTheme.typography.bodyMedium) },
+                                                singleLine = true,
+                                                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, modifier = Modifier.size(18.dp)) },
+                                                trailingIcon = {
+                                                    if (episodeSearchQuery.isNotEmpty()) {
+                                                        IconButton(onClick = { episodeSearchQuery = "" }) {
+                                                            Icon(Icons.Default.Close, contentDescription = "Clear", modifier = Modifier.size(16.dp))
+                                                        }
+                                                    }
+                                                },
+                                                shape = RoundedCornerShape(8.dp),
+                                                textStyle = MaterialTheme.typography.bodyMedium,
+                                            )
+                                            LaunchedEffect(isSearchActive) { if (isSearchActive) searchFocusRequester.requestFocus() }
+                                        }
+                                        IconButton(onClick = {
+                                            isSearchActive = !isSearchActive
+                                            if (!isSearchActive) episodeSearchQuery = ""
+                                        }) {
+                                            Icon(
+                                                if (isSearchActive) Icons.Default.Close else Icons.Default.Search,
+                                                contentDescription = if (isSearchActive) "Close search" else "Search episodes",
+                                                tint = if (isSearchActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                                            )
                                         }
                                         TextButton(onClick = { isSortAscending = !isSortAscending }) {
                                             Text(
@@ -329,6 +546,14 @@ fun DetailsContent(navController: NavController, provider: MainAPI, data: LoadRe
                         .let { list ->
                             if (isSortAscending) list.sortedBy { it.episode ?: Int.MAX_VALUE }
                             else list.sortedByDescending { it.episode ?: Int.MIN_VALUE }
+                        }
+                        .let { list ->
+                            if (episodeSearchQuery.isBlank()) list
+                            else list.filter { ep ->
+                                val q = episodeSearchQuery.trim()
+                                ep.name?.contains(q, ignoreCase = true) == true ||
+                                ep.episode?.toString()?.contains(q) == true
+                            }
                         }
                         
                     if (filteredEpisodes.isEmpty()) {
@@ -359,6 +584,14 @@ fun DetailsContent(navController: NavController, provider: MainAPI, data: LoadRe
                         .let { list ->
                             if (isSortAscending) list.sortedBy { it.episode ?: Int.MAX_VALUE }
                             else list.sortedByDescending { it.episode ?: Int.MIN_VALUE }
+                        }
+                        .let { list ->
+                            if (episodeSearchQuery.isBlank()) list
+                            else list.filter { ep ->
+                                val q = episodeSearchQuery.trim()
+                                ep.name?.contains(q, ignoreCase = true) == true ||
+                                ep.episode?.toString()?.contains(q) == true
+                            }
                         }
                         
                     if (filteredEpisodes.isEmpty()) {
