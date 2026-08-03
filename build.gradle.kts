@@ -6,6 +6,7 @@ plugins {
     alias(libs.plugins.dokka) apply false
     alias(libs.plugins.kotlin.jvm) apply false
     alias(libs.plugins.kotlin.multiplatform) apply false
+    alias(libs.plugins.kotlin.serialization) apply false
     alias(libs.plugins.spotless) apply false
 }
 
@@ -36,6 +37,11 @@ subprojects {
         }
     }
 }
+
+// Kotlin/Wasm's toolchain normally downloads its own Node.js from nodejs.org, which conflicts
+// with this project's FAIL_ON_PROJECT_REPOS repository policy (the plugin adds that repo at the
+// project level, which the policy always rejects, regardless of what's declared in settings).
+// Point it at the system-installed Node instead so no extra repository/network access is needed.
 
 allprojects {
     // https://docs.gradle.org/current/userguide/upgrading_major_version_9.html#test_task_fails_when_no_tests_are_discovered

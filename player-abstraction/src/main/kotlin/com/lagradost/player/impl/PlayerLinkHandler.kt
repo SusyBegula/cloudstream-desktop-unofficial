@@ -31,7 +31,14 @@ object PlayerLinkHandler {
         PROGRESSIVE,
     }
 
-    fun validate(link: ExtractorLink, explicitTitle: String? = null): Result<ValidatedLink> {
+    /**
+     * @param alwaysProxy When true, DASH and PROGRESSIVE links are also routed through
+     * [com.lagradost.player.impl.proxy.LocalStreamProxy] (not just HLS). Used by the headless
+     * web-client server, which — unlike MPV/VLC — can never attach custom headers itself, so
+     * every stream kind needs the proxy's header injection. Defaults to false to preserve
+     * desktop-app's existing MPV/VLC behavior unchanged.
+     */
+    fun validate(link: ExtractorLink, explicitTitle: String? = null, alwaysProxy: Boolean = false): Result<ValidatedLink> {
         // --- Handle ExtractorLinkPlayList (concatenated chunk streams) ---
         // These have url="" but provide a list of chunk URLs + durations.
         // We generate an MPV EDL (Edit Decision List) file to play them seamlessly.
@@ -78,7 +85,7 @@ object PlayerLinkHandler {
         // This makes the stream appear as a seamless local HLS feed to MPV.
         // Without this, MPV receives raw tokenized CDN segment URLs which can expire
         // mid-stream, causing broken-pieces playback.
-        val useProxy = kind == StreamKind.HLS
+        val useProxy = kind == StreamKind.HLS || alwaysProxy
         var finalSessionId: String? = null
         val finalUrl = if (useProxy) {
             val sessionId = com.lagradost.player.impl.proxy.LocalStreamProxy.registerSession(headers)
