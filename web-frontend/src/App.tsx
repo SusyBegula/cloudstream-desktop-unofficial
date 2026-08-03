@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
-import { Home, Bookmark, Package, Search, X, Play } from 'lucide-react';
-import type { ExtractorLinkDto, SearchResultDto, SubtitleFileDto } from './api/types';
+import React, { useState, useEffect } from 'react';
+import { Search, X, Play, ChevronDown } from 'lucide-react';
+import type { ExtractorLinkDto, SearchResultDto, SubtitleFileDto, ProviderDto } from './api/types';
 import api from './api/client';
 import HomeScreen from './screens/HomeScreen';
 import DetailsScreen from './screens/DetailsScreen';
@@ -26,11 +26,56 @@ type Screen =
 export const App: React.FC = () => {
   const [currentScreen, setCurrentScreen] = useState<Screen>({ type: 'home' });
 
+  // Providers & Provider Selector state
+  const [providers, setProviders] = useState<ProviderDto[]>([]);
+  const [selectedProvider, setSelectedProvider] = useState<string>('');
+
   // Global Search Modal state
   const [showSearchModal, setShowSearchModal] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [searchResults, setSearchResults] = useState<SearchResultDto[]>([]);
   const [searchLoading, setSearchLoading] = useState<boolean>(false);
+
+  // Scroll state for Netflix top header opacity transition
+  const [isScrolled, setIsScrolled] = useState<boolean>(false);
+
+  useEffect(() => {
+    async function loadProviders() {
+      try {
+        const res = await api.getProviders();
+        setProviders(res.providers);
+        if (res.providers.length > 0) {
+          const mainProvider = res.providers.find((p) => p.hasMainPage) || res.providers[0];
+          setSelectedProvider(mainProvider.name);
+        }
+      } catch (err) {
+        console.error('Failed to load providers:', err);
+      }
+    }
+    loadProviders();
+  }, []);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      setIsScrolled(window.scrollY > 30);
+    };
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  // Keyboard shortcut listener for Cmd+K / Ctrl+K
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        setShowSearchModal((prev) => !prev);
+      } else if (e.key === 'Escape' && showSearchModal) {
+        setShowSearchModal(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [showSearchModal]);
 
   const handleSearchSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -48,118 +93,163 @@ export const App: React.FC = () => {
   };
 
   return (
-    <div style={{ display: 'flex', minHeight: '100vh', backgroundColor: 'var(--bg-dark)' }}>
-      {/* Sidebar Navigation */}
+    <div style={{ minHeight: '100vh', backgroundColor: 'var(--bg-dark)' }}>
+      {/* Netflix Top Header Navigation */}
       {currentScreen.type !== 'player' && (
-        <aside
-          className="glass-panel"
-          style={{
-            width: '240px',
-            borderRadius: 0,
-            borderTop: 'none',
-            borderBottom: 'none',
-            borderLeft: 'none',
-            padding: '28px 16px',
-            display: 'flex',
-            flexDirection: 'column',
-            justifyContent: 'space-between',
-            position: 'fixed',
-            top: 0,
-            bottom: 0,
-            left: 0,
-            zIndex: 50,
-          }}
-        >
-          <div>
-            {/* Logo */}
+        <header className={`netflix-header ${isScrolled ? 'scrolled' : ''}`}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '36px' }}>
+            {/* Netflix Brand Logo */}
             <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '12px',
-                padding: '0 12px 32px 12px',
-                cursor: 'pointer',
-              }}
+              style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}
               onClick={() => setCurrentScreen({ type: 'home' })}
             >
               <div
                 style={{
-                  width: '36px',
-                  height: '36px',
-                  borderRadius: 'var(--radius-md)',
-                  background: 'linear-gradient(135deg, var(--accent-primary), var(--accent-secondary))',
+                  width: '32px',
+                  height: '32px',
+                  borderRadius: 'var(--radius-sm)',
+                  backgroundColor: 'var(--netflix-red)',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  boxShadow: 'var(--shadow-glow)',
+                  fontWeight: 900,
+                  fontSize: '1.2rem',
+                  color: '#fff',
                 }}
               >
-                <Play size={20} fill="#fff" />
+                N
               </div>
-              <div>
-                <div style={{ fontWeight: 800, fontSize: '1.15rem', letterSpacing: '-0.5px' }}>
-                  CloudStream
-                </div>
-                <div style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--accent-cyan)' }}>
-                  WEB CLIENT
-                </div>
-              </div>
+              <span style={{ fontWeight: 900, fontSize: '1.4rem', letterSpacing: '-0.8px', color: 'var(--netflix-red)' }}>
+                CLOUDSTREAM
+              </span>
             </div>
 
-            {/* Navigation Links */}
-            <nav style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-              <button
-                className={`btn ${currentScreen.type === 'home' ? 'btn-primary' : 'btn-secondary'}`}
-                style={{ justifyContent: 'flex-start', border: 'none' }}
+            {/* Top Primary Nav Links */}
+            <nav style={{ display: 'flex', gap: '24px', alignItems: 'center' }}>
+              <span
+                style={{
+                  fontSize: '0.92rem',
+                  fontWeight: currentScreen.type === 'home' ? 700 : 400,
+                  color: currentScreen.type === 'home' ? '#FFFFFF' : 'var(--text-muted)',
+                  cursor: 'pointer',
+                  transition: 'color 0.2s',
+                }}
                 onClick={() => setCurrentScreen({ type: 'home' })}
               >
-                <Home size={18} /> Home
-              </button>
+                Home
+              </span>
 
-              <button
-                className="btn btn-secondary"
-                style={{ justifyContent: 'flex-start', border: 'none' }}
-                onClick={() => setShowSearchModal(true)}
-              >
-                <Search size={18} /> Search
-              </button>
-
-              <button
-                className={`btn ${currentScreen.type === 'library' ? 'btn-primary' : 'btn-secondary'}`}
-                style={{ justifyContent: 'flex-start', border: 'none' }}
+              <span
+                style={{
+                  fontSize: '0.92rem',
+                  fontWeight: currentScreen.type === 'library' ? 700 : 400,
+                  color: currentScreen.type === 'library' ? '#FFFFFF' : 'var(--text-muted)',
+                  cursor: 'pointer',
+                  transition: 'color 0.2s',
+                }}
                 onClick={() => setCurrentScreen({ type: 'library' })}
               >
-                <Bookmark size={18} /> Library
-              </button>
+                My List
+              </span>
 
-              <button
-                className={`btn ${currentScreen.type === 'extensions' ? 'btn-primary' : 'btn-secondary'}`}
-                style={{ justifyContent: 'flex-start', border: 'none' }}
+              <span
+                style={{
+                  fontSize: '0.92rem',
+                  fontWeight: currentScreen.type === 'extensions' ? 700 : 400,
+                  color: currentScreen.type === 'extensions' ? '#FFFFFF' : 'var(--text-muted)',
+                  cursor: 'pointer',
+                  transition: 'color 0.2s',
+                }}
                 onClick={() => setCurrentScreen({ type: 'extensions' })}
               >
-                <Package size={18} /> Extensions
-              </button>
+                Extensions
+              </span>
             </nav>
           </div>
 
-          <div style={{ padding: '12px', fontSize: '0.78rem', color: 'var(--text-subtle)', textAlign: 'center' }}>
-            CloudStream Web v2.0
+          {/* Right Header Actions */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+            {/* Provider Switcher Dropdown */}
+            {providers.length > 0 && (
+              <div style={{ position: 'relative' }}>
+                <select
+                  value={selectedProvider}
+                  onChange={(e) => setSelectedProvider(e.target.value)}
+                  style={{
+                    backgroundColor: 'rgba(0,0,0,0.6)',
+                    color: '#fff',
+                    border: '1px solid rgba(255,255,255,0.2)',
+                    borderRadius: 'var(--radius-sm)',
+                    padding: '6px 30px 6px 12px',
+                    fontSize: '0.85rem',
+                    fontWeight: 600,
+                    appearance: 'none',
+                    cursor: 'pointer',
+                    outline: 'none',
+                  }}
+                >
+                  {providers.map((p) => (
+                    <option key={p.name} value={p.name} style={{ backgroundColor: '#141414', color: '#fff' }}>
+                      {p.name} ({p.lang.toUpperCase()})
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown
+                  size={14}
+                  style={{
+                    position: 'absolute',
+                    right: 8,
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    pointerEvents: 'none',
+                    color: 'var(--text-muted)',
+                  }}
+                />
+              </div>
+            )}
+
+            {/* Quick Search Button */}
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                background: 'rgba(255,255,255,0.1)',
+                border: '1px solid rgba(255,255,255,0.15)',
+                borderRadius: 'var(--radius-sm)',
+                padding: '6px 12px',
+                cursor: 'pointer',
+                fontSize: '0.85rem',
+                color: 'var(--text-muted)',
+              }}
+              onClick={() => setShowSearchModal(true)}
+            >
+              <Search size={16} color="#fff" />
+              <span>Search</span>
+              <div
+                style={{
+                  background: 'rgba(255,255,255,0.15)',
+                  padding: '1px 5px',
+                  borderRadius: '3px',
+                  fontSize: '0.7rem',
+                  fontWeight: 600,
+                  color: '#fff',
+                }}
+              >
+                ⌘K
+              </div>
+            </div>
           </div>
-        </aside>
+        </header>
       )}
 
       {/* Main Content Viewport */}
-      <main
-        style={{
-          flex: 1,
-          marginLeft: currentScreen.type !== 'player' ? '240px' : 0,
-          padding: currentScreen.type !== 'player' ? '36px 48px' : 0,
-          maxWidth: currentScreen.type !== 'player' ? '1400px' : 'none',
-          width: '100%',
-        }}
-      >
+      <main style={{ minHeight: '100vh', width: '100%' }}>
         {currentScreen.type === 'home' && (
           <HomeScreen
+            selectedProvider={selectedProvider}
+            onSelectProvider={setSelectedProvider}
+            providers={providers}
             onSelectMedia={(provider, url) => setCurrentScreen({ type: 'details', provider, url })}
             onNavigateToExtensions={() => setCurrentScreen({ type: 'extensions' })}
           />
@@ -205,36 +295,39 @@ export const App: React.FC = () => {
         {currentScreen.type === 'extensions' && <ExtensionsScreen />}
       </main>
 
-      {/* Global Search Modal */}
+      {/* Command Palette Search Overlay */}
       {showSearchModal && (
         <div
           style={{
             position: 'fixed',
             inset: 0,
-            backgroundColor: 'rgba(0,0,0,0.8)',
+            backgroundColor: 'rgba(0, 0, 0, 0.88)',
             backdropFilter: 'blur(12px)',
             zIndex: 9990,
             display: 'flex',
             justifyContent: 'center',
             alignItems: 'flex-start',
-            paddingTop: '80px',
+            paddingTop: '90px',
           }}
           onClick={() => setShowSearchModal(false)}
         >
           <div
-            className="glass-panel animate-fade-in"
+            className="animate-fade-in"
             style={{
-              width: '90%',
-              maxWidth: '800px',
+              width: '92%',
+              maxWidth: '820px',
               maxHeight: '80vh',
               overflow: 'hidden',
               display: 'flex',
               flexDirection: 'column',
               padding: '24px',
+              backgroundColor: '#181818',
+              borderRadius: 'var(--radius-md)',
+              border: '1px solid rgba(255,255,255,0.15)',
+              boxShadow: '0 20px 50px rgba(0,0,0,0.9)',
             }}
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Search Input Bar */}
             <form onSubmit={handleSearchSubmit} style={{ display: 'flex', gap: '12px', marginBottom: '20px' }}>
               <div style={{ position: 'relative', flex: 1 }}>
                 <Search
@@ -244,24 +337,25 @@ export const App: React.FC = () => {
                     left: 16,
                     top: '50%',
                     transform: 'translateY(-50%)',
-                    color: 'var(--text-muted)',
+                    color: 'var(--netflix-red)',
                   }}
                 />
                 <input
                   type="text"
-                  placeholder="Search movies, anime, tv series across providers..."
+                  placeholder="Search movies, anime, tv shows..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   autoFocus
                   style={{
                     width: '100%',
-                    background: 'rgba(0,0,0,0.5)',
-                    border: '1px solid var(--border-glass)',
-                    borderRadius: 'var(--radius-md)',
-                    padding: '12px 16px 12px 48px',
+                    background: '#222',
+                    border: '1px solid rgba(255,255,255,0.15)',
+                    borderRadius: 'var(--radius-sm)',
+                    padding: '14px 16px 14px 48px',
                     fontSize: '1.05rem',
                     color: '#fff',
                     outline: 'none',
+                    fontFamily: 'var(--font-primary)',
                   }}
                 />
               </div>
@@ -277,16 +371,18 @@ export const App: React.FC = () => {
               </button>
             </form>
 
-            {/* Results Grid */}
-            <div style={{ overflowY: 'auto', flex: 1, paddingRight: '4px' }}>
+            <div className="no-scrollbar" style={{ overflowY: 'auto', flex: 1, paddingRight: '4px' }}>
               {searchLoading ? (
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '60px 0' }}>
                   <div className="spinner" />
-                  <p style={{ marginTop: '12px', color: 'var(--text-muted)' }}>Searching providers...</p>
+                  <p style={{ marginTop: '16px', color: 'var(--text-muted)' }}>Searching providers...</p>
                 </div>
               ) : searchResults.length === 0 ? (
-                <div style={{ textAlign: 'center', padding: '40px 0', color: 'var(--text-muted)' }}>
-                  Type a title and press Search to find media across installed scrapers.
+                <div style={{ textAlign: 'center', padding: '60px 0', color: 'var(--text-muted)' }}>
+                  <p style={{ fontSize: '1rem', fontWeight: 600 }}>Type a title to search</p>
+                  <p style={{ fontSize: '0.85rem', color: 'var(--text-subtle)', marginTop: '4px' }}>
+                    Press Enter to search across active installed extensions.
+                  </p>
                 </div>
               ) : (
                 <div
@@ -299,13 +395,16 @@ export const App: React.FC = () => {
                   {searchResults.map((item, idx) => (
                     <div
                       key={idx}
-                      className="poster-card"
+                      className="poster-card animate-fade-in"
                       onClick={() => {
                         setShowSearchModal(false);
                         setCurrentScreen({ type: 'details', provider: item.apiName, url: item.url });
                       }}
                     >
                       <img src={item.posterUrl || 'https://via.placeholder.com/300x450'} alt={item.name} />
+                      <div className="poster-play-btn">
+                        <Play size={20} fill="#000" style={{ marginLeft: 2 }} />
+                      </div>
                       <div className="poster-overlay">
                         <div className="poster-title">{item.name}</div>
                         <div className="poster-meta">{item.apiName}</div>
@@ -323,3 +422,5 @@ export const App: React.FC = () => {
 };
 
 export default App;
+
+

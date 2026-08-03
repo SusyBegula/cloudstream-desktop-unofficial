@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Play, Bookmark, BookmarkCheck, ArrowLeft, Tag } from 'lucide-react';
+import { Play, Plus, Check, ArrowLeft, ChevronDown } from 'lucide-react';
 import type { EpisodeDto, ExtractorLinkDto, LoadResponseDto, SubtitleFileDto } from '../api/types';
 import api from '../api/client';
 
@@ -23,9 +23,6 @@ interface EpisodeRowProps {
   onPlay: (ep: EpisodeDto) => void;
 }
 
-// Only fully mounts once it (nearly) scrolls into view — series with hundreds of episodes
-// (long-running dramas/donghua) were rendering every row's DOM upfront, which is unnecessary
-// work when only a handful are ever visible at once.
 const EpisodeRow: React.FC<EpisodeRowProps> = ({ ep, index, onPlay }) => {
   const [visible, setVisible] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -47,54 +44,53 @@ const EpisodeRow: React.FC<EpisodeRowProps> = ({ ep, index, onPlay }) => {
   }, []);
 
   if (!visible) {
-    return <div ref={ref} style={{ height: '72px', marginBottom: '12px' }} />;
+    return <div ref={ref} style={{ height: '80px', marginBottom: '12px' }} />;
   }
 
   return (
     <div
       ref={ref}
-      className="glass-panel animate-fade-in"
+      className="animate-fade-in"
       onClick={() => onPlay(ep)}
       style={{
-        padding: '16px 20px',
+        padding: '20px 24px',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
         cursor: 'pointer',
         transition: 'var(--transition-fast)',
         marginBottom: '12px',
+        backgroundColor: '#181818',
+        borderRadius: 'var(--radius-sm)',
+        border: '1px solid rgba(255,255,255,0.05)',
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
         <div
           style={{
-            width: '40px',
-            height: '40px',
-            borderRadius: 'var(--radius-full)',
-            background: 'rgba(255,255,255,0.08)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontWeight: 700,
-            color: 'var(--accent-cyan)',
+            fontSize: '1.4rem',
+            fontWeight: 800,
+            color: 'var(--text-muted)',
+            width: '32px',
+            textAlign: 'center',
           }}
         >
           {ep.episode || index + 1}
         </div>
         <div>
-          <div style={{ fontWeight: 700, fontSize: '1.05rem', marginBottom: '2px' }}>
+          <div style={{ fontWeight: 700, fontSize: '1.1rem', marginBottom: '4px', color: '#fff' }}>
             {ep.name || `Episode ${ep.episode || index + 1}`}
           </div>
           {ep.description && (
-            <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', maxLines: 1 }}>
+            <p style={{ fontSize: '0.88rem', color: 'var(--text-muted)', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', maxWidth: '720px' }}>
               {ep.description}
             </p>
           )}
         </div>
       </div>
 
-      <button className="btn btn-primary btn-icon" style={{ flexShrink: 0 }}>
-        <Play size={18} fill="#fff" />
+      <button className="btn btn-netflix-white btn-icon" style={{ width: 44, height: 44, flexShrink: 0 }}>
+        <Play size={20} fill="#000" style={{ marginLeft: 2 }} />
       </button>
     </div>
   );
@@ -113,16 +109,13 @@ export const DetailsScreen: React.FC<DetailsScreenProps> = ({
   const [selectedSeason, setSelectedSeason] = useState<number>(1);
   const [extractingLinks, setExtractingLinks] = useState<boolean>(false);
 
-  // Load details from backend
   useEffect(() => {
     async function fetchDetails() {
       setLoading(true);
       setError(null);
       try {
-        // These two calls are independent — no need to make bookmark status wait behind load.
         const [data, bRes] = await Promise.all([api.load(provider, url), api.getBookmarks()]);
         setDetails(data);
-
         const exists = bRes.bookmarks.some((b) => b.provider === provider && b.url === url);
         setIsBookmarked(exists);
       } catch (err: any) {
@@ -166,7 +159,6 @@ export const DetailsScreen: React.FC<DetailsScreenProps> = ({
     const collectedLinks: ExtractorLinkDto[] = [];
     const collectedSubs: SubtitleFileDto[] = [];
 
-    // Connect to WebSocket link extractor
     const cancelWs = api.streamLinks(
       provider,
       dataUrl,
@@ -197,17 +189,17 @@ export const DetailsScreen: React.FC<DetailsScreenProps> = ({
 
   if (loading) {
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '120px 0' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '160px 0' }}>
         <div className="spinner" />
-        <p style={{ marginTop: '16px', color: 'var(--text-muted)' }}>Fetching title details & episodes...</p>
+        <p style={{ marginTop: '18px', color: 'var(--text-muted)', fontWeight: 500 }}>Fetching title & episodes...</p>
       </div>
     );
   }
 
   if (error || !details) {
     return (
-      <div className="glass-panel" style={{ padding: '36px', textAlign: 'center', margin: '40px 0' }}>
-        <p style={{ color: 'var(--accent-pink)', fontWeight: 600, marginBottom: '16px' }}>{error || 'Title not found'}</p>
+      <div style={{ padding: '140px 4% 40px 4%', textAlign: 'center', maxWidth: '600px', margin: '0 auto' }}>
+        <p style={{ color: 'var(--netflix-red)', fontWeight: 700, marginBottom: '20px', fontSize: '1.2rem' }}>{error || 'Title not found'}</p>
         <button className="btn btn-secondary" onClick={onBack}>
           <ArrowLeft size={18} /> Go Back
         </button>
@@ -223,22 +215,16 @@ export const DetailsScreen: React.FC<DetailsScreenProps> = ({
     details.episodes?.filter((e) => (e.season || 1) === selectedSeason) || [];
 
   return (
-    <div style={{ paddingBottom: '60px' }}>
-      {/* Back Button */}
-      <button className="btn btn-secondary" onClick={onBack} style={{ marginBottom: '24px' }}>
-        <ArrowLeft size={18} /> Back
-      </button>
-
-      {/* Backdrop & Header Header */}
+    <div style={{ paddingBottom: '80px', paddingTop: '68px' }}>
+      {/* Netflix Hero Cover Banner */}
       <div
-        className="glass-panel animate-fade-in"
+        className="animate-fade-in"
         style={{
           position: 'relative',
-          padding: '36px',
-          borderRadius: 'var(--radius-lg)',
-          overflow: 'hidden',
+          padding: '60px 4% 40px 4%',
+          minHeight: '440px',
           display: 'flex',
-          gap: '32px',
+          gap: '40px',
           flexWrap: 'wrap',
           marginBottom: '40px',
         }}
@@ -253,105 +239,139 @@ export const DetailsScreen: React.FC<DetailsScreenProps> = ({
               width: '100%',
               height: '100%',
               objectFit: 'cover',
-              filter: 'blur(16px) brightness(0.25)',
+              filter: 'brightness(0.35)',
               zIndex: 0,
             }}
           />
         )}
 
-        {/* Poster Image */}
-        <div style={{ position: 'relative', zIndex: 1, width: '220px', flexShrink: 0 }}>
+        <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, #141414 0%, transparent 80%)', zIndex: 1 }} />
+        <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to right, #141414 0%, transparent 60%)', zIndex: 1 }} />
+
+        {/* Back Button */}
+        <button
+          className="btn btn-netflix-dark"
+          onClick={onBack}
+          style={{ position: 'absolute', top: '24px', left: '4%', zIndex: 10, padding: '8px 16px', fontSize: '0.88rem' }}
+        >
+          <ArrowLeft size={18} /> Back
+        </button>
+
+        {/* Poster Card Showcase */}
+        <div style={{ position: 'relative', zIndex: 5, width: '220px', flexShrink: 0, marginTop: '20px' }}>
           <img
             src={details.posterUrl || 'https://via.placeholder.com/300x450'}
             alt={details.name}
             style={{
               width: '100%',
-              borderRadius: 'var(--radius-md)',
+              borderRadius: 'var(--radius-sm)',
               boxShadow: 'var(--shadow-card)',
-              border: '1px solid var(--border-glass)',
             }}
           />
         </div>
 
-        {/* Title Details */}
-        <div style={{ position: 'relative', zIndex: 1, flex: 1, minWidth: '280px' }}>
-          <div style={{ display: 'flex', gap: '10px', alignItems: 'center', marginBottom: '12px' }}>
-            <span className="glass-pill" style={{ color: 'var(--accent-cyan)' }}>
+        {/* Title Details Information */}
+        <div style={{ position: 'relative', zIndex: 5, flex: 1, minWidth: '320px', marginTop: '20px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+            <div style={{ width: 16, height: 16, borderRadius: 2, background: 'var(--netflix-red)', color: '#fff', fontSize: '0.65rem', fontWeight: 900, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              N
+            </div>
+            <span style={{ fontSize: '0.82rem', fontWeight: 800, letterSpacing: '2px', color: '#E5E5E5' }}>
               {details.type.toUpperCase()}
             </span>
-            {details.year && <span className="glass-pill">{details.year}</span>}
-            {details.showStatus && <span className="glass-pill">{details.showStatus}</span>}
           </div>
 
-          <h1 style={{ fontSize: '2.5rem', fontWeight: 800, marginBottom: '16px', lineHeight: 1.15 }}>
+          <h1 style={{ fontSize: '3rem', fontWeight: 900, marginBottom: '16px', lineHeight: 1.1, letterSpacing: '-0.5px' }}>
             {details.name}
           </h1>
 
-          <p style={{ color: 'var(--text-muted)', fontSize: '1rem', lineHeight: 1.6, marginBottom: '24px', maxWidth: '750px' }}>
+          <div style={{ display: 'flex', gap: '14px', alignItems: 'center', marginBottom: '20px', fontSize: '0.95rem', fontWeight: 600, flexWrap: 'wrap' }}>
+            <span style={{ color: 'var(--netflix-green)', fontWeight: 800 }}>98% Match</span>
+            {details.year && <span>{details.year}</span>}
+            {details.showStatus && (
+              <span style={{ border: '1px solid rgba(255,255,255,0.4)', padding: '1px 6px', borderRadius: 2, fontSize: '0.78rem' }}>
+                {details.showStatus}
+              </span>
+            )}
+          </div>
+
+          <p style={{ color: '#D2D2D2', fontSize: '1.05rem', lineHeight: 1.6, marginBottom: '32px', maxWidth: '780px' }}>
             {details.plot || 'No overview available for this title.'}
           </p>
 
-          {/* Tags / Genres */}
-          {details.tags && details.tags.length > 0 && (
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '24px' }}>
-              {details.tags.map((tag, i) => (
-                <span key={i} className="glass-pill" style={{ fontSize: '0.8rem' }}>
-                  <Tag size={12} /> {tag}
-                </span>
-              ))}
-            </div>
-          )}
-
-          {/* Action Buttons */}
+          {/* Primary Action Controls */}
           <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap', alignItems: 'center' }}>
             {details.kind !== 'series' && (
               <button
-                className="btn btn-primary"
+                className="btn btn-netflix-white"
                 onClick={() => handlePlayEpisode()}
                 disabled={extractingLinks}
-                style={{ padding: '12px 28px' }}
+                style={{ padding: '14px 36px', fontSize: '1.05rem' }}
               >
-                {extractingLinks ? <div className="spinner" style={{ width: 20, height: 20 }} /> : <Play size={20} fill="#fff" />}
+                {extractingLinks ? <div className="spinner" style={{ width: 20, height: 20 }} /> : <Play size={22} fill="#000" style={{ marginLeft: 2 }} />}
                 <span>{extractingLinks ? 'Extracting Streams...' : 'Play Movie'}</span>
               </button>
             )}
 
             <button
-              className={`btn ${isBookmarked ? 'btn-primary' : 'btn-secondary'}`}
+              className="btn btn-netflix-dark"
               onClick={toggleBookmark}
-              style={{ padding: '12px 22px' }}
+              style={{ padding: '14px 28px', fontSize: '1.05rem' }}
             >
-              {isBookmarked ? <BookmarkCheck size={20} /> : <Bookmark size={20} />}
-              <span>{isBookmarked ? 'In Library' : 'Bookmark'}</span>
+              {isBookmarked ? <Check size={22} style={{ color: 'var(--netflix-green)' }} /> : <Plus size={22} />}
+              <span>{isBookmarked ? 'In My List' : 'Add to My List'}</span>
             </button>
           </div>
         </div>
       </div>
 
-      {/* Episodes Section (If Series or Anime) */}
+      {/* Episode Browser Section */}
       {(details.kind === 'series' || (details.episodes && details.episodes.length > 0)) && (
-        <div>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
-            <h2 style={{ fontSize: '1.5rem', fontWeight: 700 }}>Episodes</h2>
+        <div style={{ padding: '0 4%' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px', flexWrap: 'wrap', gap: '16px' }}>
+            <h2 style={{ fontSize: '1.8rem', fontWeight: 800 }}>Episodes</h2>
 
-            {/* Season Selector */}
+            {/* Netflix Season Selector Dropdown */}
             {seasonsList.length > 1 && (
-              <div style={{ display: 'flex', gap: '8px' }}>
-                {seasonsList.map((s) => (
-                  <button
-                    key={s}
-                    className={`btn ${selectedSeason === s ? 'btn-primary' : 'btn-secondary'}`}
-                    onClick={() => setSelectedSeason(s)}
-                    style={{ padding: '6px 16px', fontSize: '0.88rem' }}
-                  >
-                    Season {s}
-                  </button>
-                ))}
+              <div style={{ position: 'relative' }}>
+                <select
+                  value={selectedSeason}
+                  onChange={(e) => setSelectedSeason(Number(e.target.value))}
+                  style={{
+                    backgroundColor: '#242424',
+                    color: '#fff',
+                    border: '1px solid rgba(255,255,255,0.2)',
+                    borderRadius: 'var(--radius-sm)',
+                    padding: '10px 40px 10px 16px',
+                    fontSize: '1rem',
+                    fontWeight: 700,
+                    appearance: 'none',
+                    cursor: 'pointer',
+                    outline: 'none',
+                  }}
+                >
+                  {seasonsList.map((s) => (
+                    <option key={s} value={s}>
+                      Season {s}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown
+                  size={18}
+                  style={{
+                    position: 'absolute',
+                    right: 12,
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    pointerEvents: 'none',
+                    color: '#fff',
+                  }}
+                />
               </div>
             )}
           </div>
 
-          {/* Episodes List Grid */}
+          {/* Episode Cards */}
           <div style={{ display: 'flex', flexDirection: 'column' }}>
             {filteredEpisodes.map((ep, i) => (
               <EpisodeRow key={i} ep={ep} index={i} onPlay={handlePlayEpisode} />
@@ -364,3 +384,4 @@ export const DetailsScreen: React.FC<DetailsScreenProps> = ({
 };
 
 export default DetailsScreen;
+

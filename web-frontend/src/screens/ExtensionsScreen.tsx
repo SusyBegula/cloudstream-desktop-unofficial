@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Package, Plus, Trash2, Download } from 'lucide-react';
+import { Package, Plus, Trash2, Download, CheckCircle2, Server } from 'lucide-react';
 import type { RepositoryDto, SitePluginDto } from '../api/types';
 import api from '../api/client';
 
@@ -70,7 +70,7 @@ export const ExtensionsScreen: React.FC = () => {
     try {
       const repoName = targetUrl.split('/').pop() || 'Repository';
       await api.addRepository({ name: repoName, url: targetUrl });
-      
+
       const updatedRepos = await api.getRepositories();
       const validRepos = updatedRepos.filter((r) => r.url && r.url.trim());
       setRepositories(validRepos);
@@ -133,39 +133,44 @@ export const ExtensionsScreen: React.FC = () => {
   };
 
   return (
-    <div style={{ paddingBottom: '60px' }}>
+    <div style={{ padding: '90px 4% 80px 4%' }}>
       {/* Header */}
-      <div style={{ marginBottom: '28px' }}>
-        <h1 style={{ fontSize: '2rem', fontWeight: 800 }} className="text-gradient">
+      <div style={{ marginBottom: '32px' }}>
+        <h1 style={{ fontSize: '2.5rem', fontWeight: 900, letterSpacing: '-0.5px' }}>
           Extensions & Plugins
         </h1>
-        <p style={{ color: 'var(--text-muted)', fontSize: '0.95rem' }}>
-          Install CloudStream `.cs3` plugins to enable content providers
+        <p style={{ color: 'var(--text-muted)', fontSize: '0.95rem', marginTop: '4px' }}>
+          Install CloudStream `.cs3` plugins to enable streaming scrapers
         </p>
       </div>
 
       {/* Add Repository Form */}
-      <div className="glass-panel" style={{ padding: '20px', marginBottom: '32px' }}>
-        <h3 style={{ fontSize: '1.1rem', fontWeight: 700, marginBottom: '12px' }}>Add Plugin Repository</h3>
-        <form onSubmit={handleAddRepo} style={{ display: 'flex', gap: '12px' }}>
+      <div style={{ backgroundColor: '#181818', padding: '24px', borderRadius: 'var(--radius-sm)', marginBottom: '36px', border: '1px solid rgba(255,255,255,0.08)' }}>
+        <h3 style={{ fontSize: '1.15rem', fontWeight: 800, marginBottom: '14px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <Server size={18} style={{ color: 'var(--netflix-red)' }} />
+          <span>Add Plugin Repository</span>
+        </h3>
+        <form onSubmit={handleAddRepo} style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
           <input
             type="text"
-            placeholder="https://raw.githubusercontent.com/.../repo.json or cloudstreamrepo://"
+            placeholder="Paste repository JSON URL (e.g. https://raw.githubusercontent.com/.../repo.json)"
             value={newRepoUrl}
             onChange={(e) => setNewRepoUrl(e.target.value)}
             disabled={isAddingRepo}
             style={{
               flex: 1,
-              background: 'rgba(0,0,0,0.4)',
-              border: '1px solid var(--border-glass)',
-              borderRadius: 'var(--radius-md)',
-              padding: '10px 16px',
+              minWidth: '280px',
+              background: '#222',
+              border: '1px solid rgba(255,255,255,0.15)',
+              borderRadius: 'var(--radius-sm)',
+              padding: '12px 18px',
               color: '#fff',
               outline: 'none',
               fontFamily: 'var(--font-primary)',
+              fontSize: '0.95rem',
             }}
           />
-          <button type="submit" className="btn btn-primary" disabled={isAddingRepo || !newRepoUrl.trim()}>
+          <button type="submit" className="btn btn-primary" disabled={isAddingRepo || !newRepoUrl.trim()} style={{ padding: '12px 24px' }}>
             {isAddingRepo ? (
               <div className="spinner" style={{ width: 18, height: 18 }} />
             ) : (
@@ -177,25 +182,25 @@ export const ExtensionsScreen: React.FC = () => {
       </div>
 
       {errorMessage && (
-        <div className="glass-panel" style={{ padding: '16px 20px', marginBottom: '24px', borderColor: 'var(--accent-pink)' }}>
-          <p style={{ color: 'var(--accent-pink)', fontSize: '0.9rem', fontWeight: 600 }}>{errorMessage}</p>
+        <div style={{ backgroundColor: 'rgba(229, 9, 20, 0.15)', padding: '18px 24px', borderRadius: 'var(--radius-sm)', marginBottom: '28px', border: '1px solid var(--netflix-red)' }}>
+          <p style={{ color: '#fff', fontSize: '0.92rem', fontWeight: 600 }}>{errorMessage}</p>
         </div>
       )}
 
       {/* Repositories Tabs */}
       {repositories.length > 0 && (
-        <div style={{ display: 'flex', gap: '10px', overflowX: 'auto', paddingBottom: '12px', marginBottom: '24px' }}>
+        <div style={{ display: 'flex', gap: '10px', overflowX: 'auto', paddingBottom: '12px', marginBottom: '28px' }}>
           {repositories.map((repo, idx) => (
             <div
               key={idx}
-              className={`glass-pill ${selectedRepoUrl === repo.url ? 'btn-primary' : ''}`}
-              style={{ cursor: 'pointer', padding: '8px 16px' }}
+              className={`btn ${selectedRepoUrl === repo.url ? 'btn-primary' : 'btn-secondary'}`}
+              style={{ cursor: 'pointer', padding: '8px 18px', fontSize: '0.88rem' }}
               onClick={() => handleSelectRepo(repo.url)}
             >
               <span>{repo.name}</span>
               <Trash2
                 size={14}
-                style={{ marginLeft: 8, opacity: 0.7 }}
+                style={{ marginLeft: 8, opacity: 0.8 }}
                 onClick={(e) => {
                   e.stopPropagation();
                   handleRemoveRepo(repo.url);
@@ -208,51 +213,70 @@ export const ExtensionsScreen: React.FC = () => {
 
       {/* Plugin Cards Grid */}
       {loading ? (
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '80px 0' }}>
-          <div className="spinner" />
-          <p style={{ marginTop: '16px', color: 'var(--text-muted)' }}>Fetching extension catalog...</p>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '20px' }}>
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="skeleton" style={{ height: '140px' }} />
+          ))}
         </div>
       ) : catalogPlugins.length === 0 ? (
-        <div className="glass-panel" style={{ padding: '40px', textAlign: 'center' }}>
-          <Package size={40} style={{ color: 'var(--text-subtle)', marginBottom: '12px' }} />
-          <p style={{ color: 'var(--text-muted)' }}>
+        <div style={{ padding: '80px', textAlign: 'center', color: 'var(--text-muted)' }}>
+          <Package size={56} style={{ color: 'var(--text-subtle)', marginBottom: '16px' }} />
+          <p style={{ fontSize: '1.05rem', fontWeight: 600 }}>
             {selectedRepoUrl
               ? 'No plugins found in this repository.'
               : 'No repositories added yet. Paste a CloudStream repo URL above to start.'}
           </p>
         </div>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '20px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '22px' }}>
           {catalogPlugins.map((plugin, idx) => {
             const isInstalled = installedPlugins.some((p) => p.internalName === plugin.internalName);
             const isLoadingThis = actionLoading === plugin.internalName;
 
             return (
-              <div key={idx} className="glass-panel animate-fade-in" style={{ padding: '20px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+              <div
+                key={idx}
+                className="animate-fade-in"
+                style={{
+                  padding: '24px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  justifyContent: 'space-between',
+                  backgroundColor: '#181818',
+                  borderRadius: 'var(--radius-sm)',
+                  border: isInstalled ? '1px solid var(--netflix-red)' : '1px solid rgba(255,255,255,0.08)',
+                }}
+              >
                 <div>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-                    <h4 style={{ fontSize: '1.1rem', fontWeight: 700 }}>{plugin.name}</h4>
-                    <span className="glass-pill" style={{ fontSize: '0.75rem', padding: '2px 8px' }}>
+                    <h4 style={{ fontSize: '1.15rem', fontWeight: 800, color: '#fff' }}>{plugin.name}</h4>
+                    <span style={{ fontSize: '0.75rem', padding: '2px 8px', borderRadius: 2, background: 'rgba(255,255,255,0.1)', color: '#fff' }}>
                       v{plugin.version}
                     </span>
                   </div>
-                  <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '16px' }}>
-                    Internal Name: {plugin.internalName}
+                  <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '20px' }}>
+                    ID: {plugin.internalName}
                   </p>
                 </div>
 
-                <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  {isInstalled ? (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--netflix-green)', fontSize: '0.82rem', fontWeight: 800 }}>
+                      <CheckCircle2 size={16} /> Installed
+                    </div>
+                  ) : <div />}
+
                   {isInstalled ? (
                     <button
                       className="btn btn-secondary"
                       onClick={() => handleUninstallPlugin(plugin)}
                       disabled={isLoadingThis}
-                      style={{ fontSize: '0.85rem' }}
+                      style={{ fontSize: '0.88rem', padding: '8px 16px' }}
                     >
                       {isLoadingThis ? (
                         <div className="spinner" style={{ width: 16, height: 16 }} />
                       ) : (
-                        <Trash2 size={16} style={{ color: 'var(--accent-pink)' }} />
+                        <Trash2 size={16} style={{ color: 'var(--netflix-red)' }} />
                       )}
                       <span>Uninstall</span>
                     </button>
@@ -261,7 +285,7 @@ export const ExtensionsScreen: React.FC = () => {
                       className="btn btn-primary"
                       onClick={() => handleInstallPlugin(plugin)}
                       disabled={isLoadingThis}
-                      style={{ fontSize: '0.85rem' }}
+                      style={{ fontSize: '0.88rem', padding: '8px 18px' }}
                     >
                       {isLoadingThis ? (
                         <div className="spinner" style={{ width: 16, height: 16 }} />
@@ -282,3 +306,5 @@ export const ExtensionsScreen: React.FC = () => {
 };
 
 export default ExtensionsScreen;
+
+

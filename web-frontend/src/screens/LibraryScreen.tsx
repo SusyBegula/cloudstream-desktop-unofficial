@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Bookmark, History, Trash2, Play } from 'lucide-react';
+import { Trash2, Play, Bookmark, Clock } from 'lucide-react';
 import type { BookmarkDto, WatchHistoryEntryDto } from '../api/types';
 import api from '../api/client';
 
@@ -17,8 +17,7 @@ export const LibraryScreen: React.FC<LibraryScreenProps> = ({ onSelectMedia }) =
     async function loadData() {
       setLoading(true);
       try {
-        const bRes = await api.getBookmarks();
-        const hRes = await api.getHistory();
+        const [bRes, hRes] = await Promise.all([api.getBookmarks(), api.getHistory()]);
         setBookmarks(bRes.bookmarks);
         setHistory(hRes.entries);
       } catch (err) {
@@ -60,46 +59,49 @@ export const LibraryScreen: React.FC<LibraryScreenProps> = ({ onSelectMedia }) =
   };
 
   return (
-    <div style={{ paddingBottom: '60px' }}>
+    <div style={{ padding: '90px 4% 80px 4%' }}>
       {/* Page Header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '28px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '36px', flexWrap: 'wrap', gap: '16px' }}>
         <div>
-          <h1 style={{ fontSize: '2rem', fontWeight: 800 }} className="text-gradient">
-            My Library
+          <h1 style={{ fontSize: '2.5rem', fontWeight: 900, letterSpacing: '-0.5px' }}>
+            My List
           </h1>
-          <p style={{ color: 'var(--text-muted)', fontSize: '0.95rem' }}>
-            Manage your bookmarked titles and watch history
+          <p style={{ color: 'var(--text-muted)', fontSize: '0.95rem', marginTop: '4px' }}>
+            Manage saved movies, anime, and watch history
           </p>
         </div>
 
-        {/* Tab Switcher */}
-        <div style={{ display: 'flex', gap: '8px' }}>
+        {/* Tab Switcher Pills */}
+        <div style={{ display: 'flex', gap: '12px' }}>
           <button
             className={`btn ${activeTab === 'bookmarks' ? 'btn-primary' : 'btn-secondary'}`}
             onClick={() => setActiveTab('bookmarks')}
+            style={{ padding: '8px 22px' }}
           >
-            <Bookmark size={18} /> Bookmarks ({bookmarks.length})
+            <Bookmark size={18} /> My List ({bookmarks.length})
           </button>
           <button
             className={`btn ${activeTab === 'history' ? 'btn-primary' : 'btn-secondary'}`}
             onClick={() => setActiveTab('history')}
+            style={{ padding: '8px 22px' }}
           >
-            <History size={18} /> History ({history.length})
+            <Clock size={18} /> Continue Watching ({history.length})
           </button>
         </div>
       </div>
 
       {loading ? (
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '100px 0' }}>
-          <div className="spinner" />
-          <p style={{ marginTop: '16px', color: 'var(--text-muted)' }}>Loading library...</p>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '20px' }}>
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="poster-card skeleton" />
+          ))}
         </div>
       ) : activeTab === 'bookmarks' ? (
         bookmarks.length === 0 ? (
-          <div className="glass-panel" style={{ padding: '48px', textAlign: 'center', margin: '40px 0' }}>
-            <Bookmark size={40} style={{ color: 'var(--text-subtle)', marginBottom: '16px' }} />
-            <h3 style={{ fontSize: '1.2rem', marginBottom: '8px' }}>No Bookmarks Yet</h3>
-            <p style={{ color: 'var(--text-muted)' }}>Save movies and TV series to quickly find them here.</p>
+          <div style={{ textAlign: 'center', padding: '100px 0', color: 'var(--text-muted)' }}>
+            <Bookmark size={56} style={{ color: 'var(--text-subtle)', marginBottom: '16px' }} />
+            <h3 style={{ fontSize: '1.4rem', fontWeight: 800, color: '#fff', marginBottom: '8px' }}>Your list is empty</h3>
+            <p style={{ fontSize: '0.95rem' }}>Save titles you want to watch later.</p>
           </div>
         ) : (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '20px' }}>
@@ -110,21 +112,25 @@ export const LibraryScreen: React.FC<LibraryScreenProps> = ({ onSelectMedia }) =
                 onClick={() => onSelectMedia(b.provider, b.url)}
               >
                 <img src={b.posterUrl || 'https://via.placeholder.com/300x450'} alt={b.name} />
+                <div className="poster-play-btn">
+                  <Play size={20} fill="#000" style={{ marginLeft: 2 }} />
+                </div>
                 <button
                   className="btn btn-secondary btn-icon"
                   style={{
                     position: 'absolute',
-                    top: '10px',
-                    right: '10px',
+                    top: '8px',
+                    right: '8px',
                     width: '32px',
                     height: '32px',
-                    background: 'rgba(0,0,0,0.7)',
-                    borderColor: 'rgba(255,255,255,0.2)',
+                    background: 'rgba(0,0,0,0.85)',
+                    border: '1px solid rgba(255,255,255,0.2)',
+                    zIndex: 10,
                   }}
                   onClick={(e) => handleDeleteBookmark(e, b)}
-                  title="Remove Bookmark"
+                  title="Remove from My List"
                 >
-                  <Trash2 size={14} style={{ color: 'var(--accent-pink)' }} />
+                  <Trash2 size={14} style={{ color: 'var(--netflix-red)' }} />
                 </button>
                 <div className="poster-overlay">
                   <div className="poster-title">{b.name}</div>
@@ -135,75 +141,79 @@ export const LibraryScreen: React.FC<LibraryScreenProps> = ({ onSelectMedia }) =
           </div>
         )
       ) : history.length === 0 ? (
-        <div className="glass-panel" style={{ padding: '48px', textAlign: 'center', margin: '40px 0' }}>
-          <History size={40} style={{ color: 'var(--text-subtle)', marginBottom: '16px' }} />
-          <h3 style={{ fontSize: '1.2rem', marginBottom: '8px' }}>No Watch History</h3>
-          <p style={{ color: 'var(--text-muted)' }}>Titles you play will automatically appear here with your watch progress.</p>
+        <div style={{ textAlign: 'center', padding: '100px 0', color: 'var(--text-muted)' }}>
+          <Clock size={56} style={{ color: 'var(--text-subtle)', marginBottom: '16px' }} />
+          <h3 style={{ fontSize: '1.4rem', fontWeight: 800, color: '#fff', marginBottom: '8px' }}>No watch history</h3>
+          <p style={{ fontSize: '0.95rem' }}>Titles you watch will appear here.</p>
         </div>
       ) : (
         <div>
-          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '16px' }}>
-            <button className="btn btn-secondary" onClick={handleClearHistory} style={{ fontSize: '0.85rem' }}>
-              <Trash2 size={16} /> Clear All History
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '20px' }}>
+            <button className="btn btn-secondary" onClick={handleClearHistory} style={{ fontSize: '0.88rem' }}>
+              <Trash2 size={16} style={{ color: 'var(--netflix-red)' }} /> Clear All History
             </button>
           </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
             {history.map((h, idx) => {
               const progressPct =
                 h.durationMs > 0 ? Math.min(100, Math.round((h.positionMs / h.durationMs) * 100)) : 0;
               return (
                 <div
                   key={idx}
-                  className="glass-panel animate-fade-in"
+                  className="animate-fade-in"
                   onClick={() => onSelectMedia(h.provider, h.url)}
                   style={{
-                    padding: '16px 20px',
+                    padding: '16px 24px',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'space-between',
                     cursor: 'pointer',
-                    gap: '16px',
+                    gap: '20px',
+                    backgroundColor: '#181818',
+                    borderRadius: 'var(--radius-sm)',
+                    border: '1px solid rgba(255,255,255,0.05)',
                   }}
                 >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flex: 1 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '20px', flex: 1 }}>
                     <img
                       src={h.posterUrl || 'https://via.placeholder.com/100x150'}
                       alt={h.name}
-                      style={{ width: '48px', height: '64px', borderRadius: 'var(--radius-sm)', objectFit: 'cover' }}
+                      style={{ width: '56px', height: '76px', borderRadius: 'var(--radius-sm)', objectFit: 'cover' }}
                     />
                     <div style={{ flex: 1 }}>
-                      <div style={{ fontWeight: 700, fontSize: '1.05rem', marginBottom: '4px' }}>{h.name}</div>
-                      <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)', marginBottom: '8px' }}>
-                        {h.provider} {h.season && `• S${h.season} E${h.episode}`}
+                      <div style={{ fontWeight: 800, fontSize: '1.15rem', marginBottom: '4px', color: '#fff' }}>{h.name}</div>
+                      <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '12px' }}>
+                        {h.provider} {h.season && `• Season ${h.season} Episode ${h.episode}`}
                       </div>
 
-                      {/* Watch Progress Bar */}
-                      <div style={{ width: '100%', maxWidth: '300px', height: '4px', background: 'rgba(255,255,255,0.1)', borderRadius: '2px', overflow: 'hidden' }}>
+                      {/* Netflix Watch Progress Bar */}
+                      <div style={{ width: '100%', maxWidth: '360px', height: '4px', background: '#333333', borderRadius: '2px', overflow: 'hidden' }}>
                         <div
                           style={{
                             width: `${progressPct}%`,
                             height: '100%',
-                            background: 'linear-gradient(90deg, var(--accent-primary), var(--accent-cyan))',
+                            background: 'var(--netflix-red)',
                           }}
                         />
                       </div>
                     </div>
                   </div>
 
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                    <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--accent-cyan)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                    <span style={{ fontSize: '0.88rem', fontWeight: 800, color: 'var(--netflix-green)' }}>
                       {progressPct}%
                     </span>
-                    <button className="btn btn-primary btn-icon" title="Resume Playback">
-                      <Play size={16} fill="#fff" />
+                    <button className="btn btn-netflix-white btn-icon" style={{ width: 42, height: 42 }} title="Resume Playback">
+                      <Play size={18} fill="#000" style={{ marginLeft: 2 }} />
                     </button>
                     <button
                       className="btn btn-secondary btn-icon"
+                      style={{ width: 42, height: 42 }}
                       onClick={(e) => handleDeleteHistoryItem(e, h)}
-                      title="Remove Item"
+                      title="Remove"
                     >
-                      <Trash2 size={16} style={{ color: 'var(--accent-pink)' }} />
+                      <Trash2 size={16} style={{ color: 'var(--netflix-red)' }} />
                     </button>
                   </div>
                 </div>
@@ -217,3 +227,5 @@ export const LibraryScreen: React.FC<LibraryScreenProps> = ({ onSelectMedia }) =
 };
 
 export default LibraryScreen;
+
+

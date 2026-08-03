@@ -1,9 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Play, ChevronDown, Sparkles, PackagePlus } from 'lucide-react';
+import { Play, Info, ChevronLeft, ChevronRight, PackagePlus } from 'lucide-react';
 import type { MainPageCategoryDto, MainPageRowDto, ProviderDto, SearchResultDto } from '../api/types';
 import api from '../api/client';
 
 interface HomeScreenProps {
+  selectedProvider: string;
+  onSelectProvider: (provider: string) => void;
+  providers: ProviderDto[];
   onSelectMedia: (provider: string, url: string) => void;
   onNavigateToExtensions?: () => void;
 }
@@ -15,13 +18,11 @@ interface CategoryRowProps {
   onLoaded: (index: number, row: MainPageRowDto | null) => void;
 }
 
-// Fetches its own category's items only once it (nearly) scrolls into view, instead of the
-// homepage waiting on every category up front — a provider can have 30+ categories, each a
-// separate network round-trip to the provider site.
 const CategoryRow: React.FC<CategoryRowProps> = ({ provider, category, onSelectMedia, onLoaded }) => {
   const [row, setRow] = useState<MainPageRowDto | null>(null);
   const [visible, setVisible] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const el = containerRef.current;
@@ -59,84 +60,80 @@ const CategoryRow: React.FC<CategoryRowProps> = ({ provider, category, onSelectM
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible, provider, category.index]);
 
+  const scroll = (direction: 'left' | 'right') => {
+    if (scrollRef.current) {
+      const scrollAmount = direction === 'left' ? -540 : 540;
+      scrollRef.current.scrollBy({ left: scrollAmount, behavior: 'smooth' });
+    }
+  };
+
   if (row && row.items.length === 0) return null;
 
   return (
-    <div ref={containerRef} style={{ marginBottom: '36px' }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
-        <h3 style={{ fontSize: '1.35rem', fontWeight: 700 }}>{row?.name || category.name}</h3>
-      </div>
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))',
-          gap: '20px',
-        }}
-      >
-        {row
-          ? row.items.map((item, itemIdx) => (
-              <div
-                key={itemIdx}
-                className="poster-card animate-fade-in"
-                onClick={() => onSelectMedia(provider, item.url)}
-              >
-                <img
-                  src={item.posterUrl || 'https://via.placeholder.com/300x450?text=No+Poster'}
-                  alt={item.name}
-                  loading="lazy"
-                />
-                {item.quality && <div className="poster-badge">{item.quality}</div>}
-                <div className="poster-overlay">
-                  <div className="poster-title">{item.name}</div>
-                  <div className="poster-meta">
-                    {item.year && <span>{item.year}</span>}
-                    {item.type && <span>• {item.type}</span>}
+    <div ref={containerRef} className="netflix-row">
+      <h3 className="netflix-row-title">
+        {row?.name || category.name}
+      </h3>
+
+      <div style={{ position: 'relative' }}>
+        {row && row.items.length > 5 && (
+          <>
+            <button className="row-nav-btn left" onClick={() => scroll('left')} aria-label="Scroll left">
+              <ChevronLeft size={28} />
+            </button>
+            <button className="row-nav-btn right" onClick={() => scroll('right')} aria-label="Scroll right">
+              <ChevronRight size={28} />
+            </button>
+          </>
+        )}
+
+        <div ref={scrollRef} className="row-container no-scrollbar">
+          {row
+            ? row.items.map((item, itemIdx) => (
+                <div
+                  key={itemIdx}
+                  className="poster-card animate-fade-in"
+                  onClick={() => onSelectMedia(provider, item.url)}
+                >
+                  <img
+                    src={item.posterUrl || 'https://via.placeholder.com/300x450?text=No+Poster'}
+                    alt={item.name}
+                    loading="lazy"
+                  />
+                  {item.quality && <div className="poster-badge">{item.quality}</div>}
+                  <div className="poster-play-btn">
+                    <Play size={20} fill="#000" style={{ marginLeft: 2 }} />
+                  </div>
+                  <div className="poster-overlay">
+                    <div className="poster-title">{item.name}</div>
+                    <div className="poster-meta">
+                      <span>98% Match</span>
+                      {item.year && <span style={{ color: 'var(--text-muted)' }}>• {item.year}</span>}
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))
-          : Array.from({ length: 6 }).map((_, i) => (
-              <div
-                key={i}
-                className="poster-card"
-                style={{ background: 'rgba(255,255,255,0.05)', aspectRatio: '2 / 3' }}
-              />
-            ))}
+              ))
+            : Array.from({ length: 6 }).map((_, i) => (
+                <div key={i} className="poster-card skeleton" />
+              ))}
+        </div>
       </div>
     </div>
   );
 };
 
-export const HomeScreen: React.FC<HomeScreenProps> = ({ onSelectMedia, onNavigateToExtensions }) => {
-  const [providers, setProviders] = useState<ProviderDto[]>([]);
-  const [selectedProvider, setSelectedProvider] = useState<string>('');
+export const HomeScreen: React.FC<HomeScreenProps> = ({
+  selectedProvider,
+  providers,
+  onSelectMedia,
+  onNavigateToExtensions,
+}) => {
   const [categories, setCategories] = useState<MainPageCategoryDto[]>([]);
   const [loadedRows, setLoadedRows] = useState<Record<number, MainPageRowDto | null>>({});
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Fetch Providers list on mount
-  useEffect(() => {
-    async function loadProviders() {
-      try {
-        const res = await api.getProviders();
-        setProviders(res.providers);
-        if (res.providers.length > 0) {
-          const mainProvider = res.providers.find((p) => p.hasMainPage) || res.providers[0];
-          setSelectedProvider(mainProvider.name);
-        } else {
-          setLoading(false);
-        }
-      } catch (err: any) {
-        setError(err.message || 'Failed to fetch providers');
-        setLoading(false);
-      }
-    }
-    loadProviders();
-  }, []);
-
-  // Fetch just the category list (instant, no network calls to the provider site) when the
-  // selected provider changes. Each category's items are fetched lazily by CategoryRow.
+  // Fetch categories when selected provider changes
   useEffect(() => {
     if (!selectedProvider) return;
     async function fetchCategories() {
@@ -163,105 +160,36 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onSelectMedia, onNavigat
     categories.length > 0 ? loadedRows[categories[0].index]?.items[0] || null : null;
 
   return (
-    <div style={{ paddingBottom: '60px' }}>
-      {/* Top Bar / Provider Selector */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          marginBottom: '28px',
-        }}
-      >
-        <div>
-          <h1 style={{ fontSize: '2rem', fontWeight: 800 }} className="text-gradient">
-            Discover & Stream
-          </h1>
-          <p style={{ color: 'var(--text-muted)', fontSize: '0.95rem' }}>
-            Explore trending movies, anime, and TV shows across providers
-          </p>
-        </div>
-
-        {/* Provider Switcher Dropdown */}
-        {providers.length > 0 && (
-          <div style={{ position: 'relative' }}>
-            <select
-              value={selectedProvider}
-              onChange={(e) => setSelectedProvider(e.target.value)}
-              className="glass-pill"
-              style={{
-                padding: '10px 36px 10px 18px',
-                fontSize: '0.95rem',
-                fontWeight: 600,
-                appearance: 'none',
-                cursor: 'pointer',
-                outline: 'none',
-              }}
-            >
-              {providers.map((p) => (
-                <option key={p.name} value={p.name} style={{ backgroundColor: '#12141d', color: '#fff' }}>
-                  {p.name} ({p.lang.toUpperCase()})
-                </option>
-              ))}
-            </select>
-            <ChevronDown
-              size={18}
-              style={{
-                position: 'absolute',
-                right: 12,
-                top: '50%',
-                transform: 'translateY(-50%)',
-                pointerEvents: 'none',
-                color: 'var(--text-muted)',
-              }}
-            />
-          </div>
-        )}
-      </div>
-
+    <div style={{ paddingBottom: '80px' }}>
       {loading ? (
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '100px 0' }}>
-          <div className="spinner" />
-          <p style={{ marginTop: '16px', color: 'var(--text-muted)' }}>Loading provider catalog...</p>
+        <div style={{ padding: '120px 4% 0 4%' }}>
+          <div className="skeleton" style={{ height: '60vh', marginBottom: '40px', borderRadius: 'var(--radius-sm)' }} />
+          <div className="skeleton" style={{ height: '200px', marginBottom: '32px' }} />
         </div>
       ) : providers.length === 0 ? (
-        <div className="glass-panel" style={{ padding: '48px', textAlign: 'center', margin: '40px 0' }}>
-          <PackagePlus size={48} style={{ color: 'var(--accent-cyan)', marginBottom: '16px' }} />
-          <h2 style={{ fontSize: '1.5rem', fontWeight: 800, marginBottom: '8px' }}>
+        <div style={{ padding: '140px 4% 40px 4%', textAlign: 'center', maxWidth: '600px', margin: '0 auto' }}>
+          <PackagePlus size={64} style={{ color: 'var(--netflix-red)', marginBottom: '20px' }} />
+          <h2 style={{ fontSize: '1.8rem', fontWeight: 800, marginBottom: '12px' }}>
             No Extension Plugins Installed
           </h2>
-          <p style={{ color: 'var(--text-muted)', maxWidth: '500px', margin: '0 auto 24px auto', lineHeight: 1.6 }}>
+          <p style={{ color: 'var(--text-muted)', marginBottom: '32px', lineHeight: 1.6 }}>
             You haven't installed any CloudStream `.cs3` plugins yet. Add a repository in the Extensions tab to start streaming!
           </p>
           {onNavigateToExtensions && (
-            <button className="btn btn-primary" onClick={onNavigateToExtensions}>
+            <button className="btn btn-primary" onClick={onNavigateToExtensions} style={{ padding: '14px 36px', fontSize: '1rem' }}>
               Go to Extensions Store
             </button>
           )}
         </div>
       ) : error ? (
-        <div className="glass-panel" style={{ padding: '32px', textAlign: 'center', margin: '40px 0' }}>
-          <p style={{ color: 'var(--accent-pink)', fontWeight: 600, marginBottom: '12px' }}>{error}</p>
-          <button className="btn btn-secondary" onClick={() => setSelectedProvider(selectedProvider)}>
-            Retry Loading
-          </button>
+        <div style={{ padding: '140px 4% 40px 4%', textAlign: 'center', maxWidth: '600px', margin: '0 auto' }}>
+          <p style={{ color: 'var(--netflix-red)', fontWeight: 700, marginBottom: '20px', fontSize: '1.2rem' }}>{error}</p>
         </div>
       ) : (
         <>
-          {/* Featured Hero Banner */}
+          {/* Netflix Hero Billboard */}
           {featuredItem && (
-            <div
-              className="glass-panel animate-fade-in"
-              style={{
-                position: 'relative',
-                height: '380px',
-                borderRadius: 'var(--radius-lg)',
-                overflow: 'hidden',
-                marginBottom: '40px',
-                display: 'flex',
-                alignItems: 'flex-end',
-              }}
-            >
+            <div className="hero-billboard animate-fade-in">
               <img
                 src={featuredItem.posterUrl || ''}
                 alt={featuredItem.name}
@@ -271,56 +199,73 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onSelectMedia, onNavigat
                   width: '100%',
                   height: '100%',
                   objectFit: 'cover',
-                  filter: 'brightness(0.55)',
+                  objectPosition: 'center 20%',
+                  filter: 'brightness(0.75)',
                 }}
               />
-              <div
-                style={{
-                  position: 'absolute',
-                  inset: 0,
-                  background: 'linear-gradient(to top, rgba(8,9,12,0.95) 0%, rgba(8,9,12,0.4) 60%, transparent 100%)',
-                }}
-              />
-              <div style={{ position: 'relative', zIndex: 2, padding: '36px', maxWidth: '650px' }}>
-                <div className="glass-pill" style={{ marginBottom: '12px', background: 'rgba(99,102,241,0.25)', borderColor: 'var(--accent-primary)' }}>
-                  <Sparkles size={14} style={{ color: 'var(--accent-cyan)' }} />
-                  <span>Featured on {selectedProvider}</span>
+              <div className="billboard-vignette-left" />
+              <div className="billboard-vignette-bottom" />
+
+              <div style={{ position: 'relative', zIndex: 5, maxWidth: '640px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+                  <div style={{ width: 16, height: 16, borderRadius: 2, background: 'var(--netflix-red)', color: '#fff', fontSize: '0.65rem', fontWeight: 900, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    N
+                  </div>
+                  <span style={{ fontSize: '0.82rem', fontWeight: 800, letterSpacing: '2px', color: '#E5E5E5' }}>
+                    FEATURED SELECTION
+                  </span>
                 </div>
-                <h2 style={{ fontSize: '2.4rem', fontWeight: 800, lineHeight: 1.1, marginBottom: '12px' }}>
+
+                <h1 style={{ fontSize: '3.2rem', fontWeight: 900, lineHeight: 1.1, marginBottom: '16px', textShadow: '0 4px 16px rgba(0,0,0,0.8)', letterSpacing: '-0.5px' }}>
                   {featuredItem.name}
-                </h2>
-                <div style={{ display: 'flex', gap: '12px', alignItems: 'center', marginBottom: '20px', fontSize: '0.9rem', color: 'var(--text-muted)' }}>
-                  {featuredItem.year && (
-                    <span className="glass-pill">{featuredItem.year}</span>
-                  )}
+                </h1>
+
+                <div style={{ display: 'flex', gap: '12px', alignItems: 'center', marginBottom: '24px', fontSize: '0.92rem', color: '#fff', fontWeight: 600 }}>
+                  <span style={{ color: 'var(--netflix-green)', fontWeight: 800 }}>98% Match</span>
+                  {featuredItem.year && <span>{featuredItem.year}</span>}
                   {featuredItem.quality && (
-                    <span className="glass-pill" style={{ color: 'var(--accent-cyan)' }}>{featuredItem.quality}</span>
+                    <span style={{ border: '1px solid rgba(255,255,255,0.4)', padding: '1px 6px', borderRadius: 2, fontSize: '0.75rem' }}>
+                      {featuredItem.quality}
+                    </span>
                   )}
                   {featuredItem.type && (
-                    <span style={{ textTransform: 'capitalize' }}>{featuredItem.type}</span>
+                    <span style={{ textTransform: 'capitalize', color: 'var(--text-muted)' }}>{featuredItem.type}</span>
                   )}
                 </div>
-                <button
-                  className="btn btn-primary"
-                  onClick={() => onSelectMedia(selectedProvider, featuredItem.url)}
-                  style={{ padding: '12px 28px', fontSize: '1rem' }}
-                >
-                  <Play size={20} fill="#fff" /> Watch Now
-                </button>
+
+                <div style={{ display: 'flex', gap: '14px', alignItems: 'center' }}>
+                  <button
+                    className="btn btn-netflix-white"
+                    onClick={() => onSelectMedia(selectedProvider, featuredItem.url)}
+                    style={{ padding: '12px 32px', fontSize: '1.05rem' }}
+                  >
+                    <Play size={22} fill="#000" style={{ marginLeft: 2 }} /> Play
+                  </button>
+
+                  <button
+                    className="btn btn-netflix-dark"
+                    onClick={() => onSelectMedia(selectedProvider, featuredItem.url)}
+                    style={{ padding: '12px 28px', fontSize: '1.05rem' }}
+                  >
+                    <Info size={22} /> More Info
+                  </button>
+                </div>
               </div>
             </div>
           )}
 
-          {/* Rows / Carousels, each lazily fetching its own items as it scrolls into view */}
-          {categories.map((category) => (
-            <CategoryRow
-              key={category.index}
-              provider={selectedProvider}
-              category={category}
-              onSelectMedia={onSelectMedia}
-              onLoaded={handleRowLoaded}
-            />
-          ))}
+          {/* Netflix Category Rows */}
+          <div style={{ marginTop: featuredItem ? '-40px' : '100px', position: 'relative', zIndex: 10 }}>
+            {categories.map((category) => (
+              <CategoryRow
+                key={category.index}
+                provider={selectedProvider}
+                category={category}
+                onSelectMedia={onSelectMedia}
+                onLoaded={handleRowLoaded}
+              />
+            ))}
+          </div>
         </>
       )}
     </div>
@@ -328,3 +273,5 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onSelectMedia, onNavigat
 };
 
 export default HomeScreen;
+
+
