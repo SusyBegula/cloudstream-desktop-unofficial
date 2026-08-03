@@ -65,8 +65,27 @@ cd cloudstream-desktop-unofficial
 > **DO NOT download as a ZIP file** from GitHub, as ZIP downloads exclude submodules and will cause compilation failures in `:library`.
 
 ### 2. Run Locally in Development Mode
+
+#### Desktop Application:
 ```bash
 ./gradlew desktop-app:run
+```
+
+#### Modern Web Client (Vite + React UI + Ktor Backend):
+```bash
+# 1. Build the web frontend
+cd web-frontend && npm install && npm run build && cd ..
+
+# 2. Run the server (serves the web app at http://localhost:8080)
+./gradlew :server-app:run
+```
+Or for web development with HMR:
+```bash
+# Terminal 1 (Backend):
+./gradlew :server-app:run
+
+# Terminal 2 (Vite Frontend with hot reload on http://localhost:3000):
+cd web-frontend && npm run dev
 ```
 
 ### 3. Run Unit Tests

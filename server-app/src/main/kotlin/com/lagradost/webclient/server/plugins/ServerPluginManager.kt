@@ -2,6 +2,7 @@ package com.lagradost.webclient.server.plugins
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties
 import com.fasterxml.jackson.annotation.JsonProperty
+import com.fasterxml.jackson.databind.DeserializationFeature
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.kotlinModule
 import com.fasterxml.jackson.module.kotlin.readValue
@@ -14,11 +15,7 @@ import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.File
-
-data class RepoManifest(
-    @JsonProperty("name") val name: String,
-    @JsonProperty("pluginLists") val pluginLists: List<String> = emptyList(),
-)
+import java.net.URI
 
 @JsonIgnoreProperties(ignoreUnknown = true)
 data class SitePlugin(
@@ -27,18 +24,36 @@ data class SitePlugin(
     @JsonProperty("url") val url: String,
     @JsonProperty("jarUrl") val jarUrl: String? = null,
     @JsonProperty("version") val version: Int = 1,
+    @JsonProperty("status") val status: Int = 1,
 )
 
 data class SavedRepo(val name: String, val url: String)
 
-/**
- * Server-side, simplified port of desktop-app's DesktopRepositoryManager — repo/plugin catalog
- * fetch + install/uninstall only (no icon caching, sync reports, or legacy-format migration).
- * Duplicated rather than shared, per the "leave desktop-app untouched" decision.
- */
 object ServerPluginManager {
-    private val client = OkHttpClient()
+    private val client = OkHttpClient.Builder()
+        .followRedirects(true)
+        .followSslRedirects(true)
+        .addInterceptor { chain ->
+            val req = chain.request().newBuilder()
+                .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36")
+                .build()
+            chain.proceed(req)
+        }
+        .build()
+
+    private val redirectClient = OkHttpClient.Builder()
+        .followRedirects(false)
+        .addInterceptor { chain ->
+            val req = chain.request().newBuilder()
+                .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36")
+                .build()
+            chain.proceed(req)
+        }
+        .build()
+
     private val mapper = ObjectMapper().registerModule(kotlinModule())
+        .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
+
     private val reposFile by lazy { File(PlatformPaths.extensionsDir.also { it.mkdirs() }, "repos.json") }
 
     fun getSavedRepos(): List<SavedRepo> {
@@ -51,7 +66,8 @@ object ServerPluginManager {
     }
 
     fun addRepo(repo: SavedRepo) {
-        val current = getSavedRepos().filterNot { it.url == repo.url } + repo
+        val cleanUrl = repo.url.trim()
+        val current = getSavedRepos().filterNot { it.url == cleanUrl } + SavedRepo(repo.name, cleanUrl)
         reposFile.writeText(mapper.writeValueAsString(current))
     }
 
@@ -59,17 +75,118 @@ object ServerPluginManager {
         reposFile.writeText(mapper.writeValueAsString(getSavedRepos().filterNot { it.url == url }))
     }
 
-    suspend fun fetchCatalog(repoUrl: String): List<SitePlugin> = withContext(Dispatchers.IO) {
-        val manifest = fetchJson<RepoManifest>(repoUrl) ?: return@withContext emptyList()
-        manifest.pluginLists.flatMap { listUrl -> fetchJson<List<SitePlugin>>(listUrl) ?: emptyList() }
+    suspend fun parseRepoUrl(url: String): String? = withContext(Dispatchers.IO) {
+        val fixedUrl = url.trim()
+        if (fixedUrl.matches(Regex("^[a-zA-Z0-9!_-]+$"))) {
+            try {
+                val req = Request.Builder().url("https://cutt.ly/$fixedUrl").build()
+                redirectClient.newCall(req).execute().use { resp ->
+                    val loc = resp.header("Location")
+                    if (loc != null && !loc.startsWith("https://cutt.ly/404")) {
+                        return@withContext loc
+                    }
+                }
+            } catch (e: Exception) {
+                AppLogger.i("Shortlink resolution failed for $fixedUrl")
+            }
+            return@withContext null
+        }
+        if (fixedUrl.contains(Regex("^(cloudstreamrepo://)|(https://cs\\.repo/\\??)"))) {
+            val stripped = fixedUrl.replace(Regex("^(cloudstreamrepo://)|(https://cs\\.repo/\\??)"), "")
+            return@withContext if (!stripped.startsWith("http")) "https://$stripped" else stripped
+        }
+        if (!fixedUrl.matches(Regex("^https?://.*"))) {
+            return@withContext null
+        }
+        return@withContext fixedUrl
     }
 
-    private inline fun <reified T> fetchJson(url: String): T? {
+    private fun resolveUrl(baseUrl: String, relativeUrl: String): String {
+        return try {
+            if (relativeUrl.startsWith("http://") || relativeUrl.startsWith("https://")) {
+                relativeUrl
+            } else {
+                URI.create(baseUrl).resolve(relativeUrl).toString()
+            }
+        } catch (e: Exception) {
+            relativeUrl
+        }
+    }
+
+    suspend fun fetchCatalog(repoUrl: String): List<SitePlugin> = withContext(Dispatchers.IO) {
+        val cleanUrl = parseRepoUrl(repoUrl) ?: repoUrl
+        AppLogger.i("ServerPluginManager: Fetching catalog for $cleanUrl (original: $repoUrl)")
+        val bodyText = fetchString(cleanUrl)
+        if (bodyText == null) {
+            AppLogger.e("ServerPluginManager: Empty response when fetching $cleanUrl")
+            return@withContext emptyList()
+        }
+
+        if (bodyText.trimStart().startsWith("<")) {
+            AppLogger.e("ServerPluginManager: Received HTML instead of JSON from $cleanUrl")
+            return@withContext emptyList()
+        }
+
+        val plugins = mutableListOf<SitePlugin>()
+
+        try {
+            val rootNode = mapper.readTree(bodyText)
+
+            if (rootNode.isObject && rootNode.has("pluginLists")) {
+                val pluginLists = rootNode.get("pluginLists")
+                if (pluginLists.isArray) {
+                    for (node in pluginLists) {
+                        val listUrl = node.asText()
+                        val fullListUrl = resolveUrl(cleanUrl, listUrl)
+                        val listBody = fetchString(fullListUrl) ?: continue
+                        if (listBody.trimStart().startsWith("<")) continue
+                        plugins.addAll(parsePluginsFromJson(listBody))
+                    }
+                }
+            } else {
+                plugins.addAll(parsePluginsFromJson(bodyText))
+            }
+        } catch (e: Exception) {
+            AppLogger.e("ServerPluginManager: Error parsing repository JSON from $cleanUrl", e)
+        }
+
+        val result = plugins.filter { it.status != 0 }.distinctBy { it.internalName }
+        AppLogger.i("ServerPluginManager: Successfully loaded ${result.size} plugins from $cleanUrl")
+        result
+    }
+
+    private fun parsePluginsFromJson(json: String): List<SitePlugin> {
+        val list = mutableListOf<SitePlugin>()
+        try {
+            val tree = mapper.readTree(json)
+            val nodes = when {
+                tree.isArray -> tree.asSequence().toList()
+                tree.isObject && tree.has("plugins") && tree.get("plugins").isArray -> tree.get("plugins").asSequence().toList()
+                tree.isObject -> listOf(tree)
+                else -> emptyList()
+            }
+            for (node in nodes) {
+                val name = node.get("name")?.asText() ?: node.get("pluginName")?.asText() ?: node.get("internalName")?.asText() ?: continue
+                val internalName = node.get("internalName")?.asText() ?: name
+                val url = node.get("url")?.asText() ?: node.get("jarUrl")?.asText() ?: ""
+                val jarUrl = node.get("jarUrl")?.asText()
+                val version = node.get("version")?.asInt(1) ?: 1
+                val status = node.get("status")?.asInt(1) ?: 1
+                if (url.isNotEmpty() || jarUrl != null) {
+                    list.add(SitePlugin(name, internalName, url, jarUrl, version, status))
+                }
+            }
+        } catch (e: Exception) {
+            AppLogger.e("Failed to parse plugins JSON node", e)
+        }
+        return list
+    }
+
+    private fun fetchString(url: String): String? {
         return try {
             val response = client.newCall(Request.Builder().url(url).build()).execute()
             response.use {
-                if (!it.isSuccessful) return null
-                mapper.readValue(it.body?.string() ?: return null)
+                if (!it.isSuccessful) null else it.body.string()
             }
         } catch (e: Exception) {
             AppLogger.e("Failed to fetch $url", e)
@@ -91,7 +208,7 @@ object ServerPluginManager {
             val response = client.newCall(Request.Builder().url(downloadUrl).build()).execute()
             response.use {
                 if (!it.isSuccessful) return@withContext Result.failure(Exception("Download failed: ${it.code}"))
-                val bytes = it.body?.bytes() ?: return@withContext Result.failure(Exception("Empty response"))
+                val bytes = it.body.bytes()
                 val extensionsDir = PlatformPaths.extensionsDir.also { dir -> dir.mkdirs() }
                 val file = File(extensionsDir, "${plugin.internalName}.cs3")
                 file.writeBytes(bytes)

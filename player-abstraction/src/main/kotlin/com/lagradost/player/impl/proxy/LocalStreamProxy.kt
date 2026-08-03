@@ -3,10 +3,13 @@ package com.lagradost.player.impl.proxy
 import com.lagradost.cloudstream3.app
 import com.lagradost.common.logging.AppLogger
 import io.ktor.http.ContentType
+import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.call
+import io.ktor.server.application.install
 import io.ktor.server.engine.embeddedServer
 import io.ktor.server.netty.Netty
+import io.ktor.server.plugins.cors.routing.CORS
 import io.ktor.server.request.queryString
 import io.ktor.server.response.header
 import io.ktor.server.response.respond
@@ -91,6 +94,17 @@ object LocalStreamProxy {
     fun start(fixedPort: Int = 0) {
         if (server != null) return
         server = embeddedServer(Netty, port = fixedPort, host = bindHost) {
+            // The web player (a different origin/port than this proxy) fetches manifests and
+            // Range-requested segments via fetch/XHR, which requires CORS response headers —
+            // without this, the browser blocks reading the response with an empty body.
+            install(CORS) {
+                anyHost()
+                allowHeader(HttpHeaders.Range)
+                allowHeader(HttpHeaders.ContentType)
+                exposeHeader(HttpHeaders.ContentRange)
+                exposeHeader(HttpHeaders.AcceptRanges)
+                exposeHeader(HttpHeaders.ContentLength)
+            }
             routing {
                 get("/proxy") {
                     handleRequest(call)

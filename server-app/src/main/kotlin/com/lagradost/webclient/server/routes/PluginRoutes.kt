@@ -1,5 +1,8 @@
 package com.lagradost.webclient.server.routes
 
+import com.fasterxml.jackson.databind.DeserializationFeature
+import com.fasterxml.jackson.databind.ObjectMapper
+import com.fasterxml.jackson.module.kotlin.kotlinModule
 import com.lagradost.webclient.api.ActionResult
 import com.lagradost.webclient.api.InstallPluginRequest
 import com.lagradost.webclient.api.InstalledPluginsResponse
@@ -13,7 +16,7 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.http.content.PartData
 import io.ktor.http.content.forEachPart
 import io.ktor.server.application.call
-import io.ktor.server.request.receive
+import io.ktor.server.request.receiveText
 import io.ktor.server.request.receiveMultipart
 import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
@@ -22,46 +25,72 @@ import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ktor.utils.io.toByteArray
 
+private val jacksonMapper = ObjectMapper()
+    .registerModule(kotlinModule())
+    .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
+
 fun Route.pluginRoutes() {
     get("/api/plugins/repositories") {
-        call.respond(ServerPluginManager.getSavedRepos().map { RepositoryDto(it.name, it.url) })
+        val repos = ServerPluginManager.getSavedRepos()
+            .filter { it.url.isNotBlank() }
+            .map { RepositoryDto(it.name.ifBlank { "Repository" }, it.url) }
+        call.respond(repos)
     }
 
     post("/api/plugins/repositories") {
-        val repo = call.receive<RepositoryDto>()
-        ServerPluginManager.addRepo(SavedRepo(repo.name, repo.url))
-        call.respond(ActionResult(true))
+        try {
+            val body = call.receiveText()
+            val node = jacksonMapper.readTree(body)
+            val url = node.get("url")?.asText()?.trim() ?: ""
+            val name = node.get("name")?.asText()?.trim() ?: ""
+            if (url.isBlank()) {
+                call.respond(HttpStatusCode.BadRequest, ActionResult(false, "Repository URL cannot be empty"))
+                return@post
+            }
+            ServerPluginManager.addRepo(SavedRepo(name.ifBlank { "Repository" }, url))
+            call.respond(ActionResult(true))
+        } catch (e: Exception) {
+            call.respond(HttpStatusCode.BadRequest, ActionResult(false, e.message ?: "Invalid request"))
+        }
     }
 
     delete("/api/plugins/repositories") {
-        val url = call.request.queryParameters["url"]
-        if (url == null) {
-            call.respond(HttpStatusCode.BadRequest)
-            return@delete
+        try {
+            val url = call.request.queryParameters["url"]
+            if (url.isNullOrBlank()) {
+                call.respond(HttpStatusCode.BadRequest, ActionResult(false, "Missing url parameter"))
+                return@delete
+            }
+            ServerPluginManager.removeRepo(url)
+            call.respond(ActionResult(true))
+        } catch (e: Exception) {
+            call.respond(HttpStatusCode.InternalServerError, ActionResult(false, e.message))
         }
-        ServerPluginManager.removeRepo(url)
-        call.respond(ActionResult(true))
     }
 
     get("/api/plugins/catalog") {
-        val repoUrl = call.request.queryParameters["repo"]
-        if (repoUrl == null) {
-            call.respond(HttpStatusCode.BadRequest)
-            return@get
+        try {
+            val repoUrl = call.request.queryParameters["repo"]
+            if (repoUrl.isNullOrBlank()) {
+                call.respond(HttpStatusCode.BadRequest, ActionResult(false, "Missing repo parameter"))
+                return@get
+            }
+            val installedNames = ServerPluginManager.listInstalled().mapNotNull { it["sourcePlugin"] as? String }
+            val plugins = ServerPluginManager.fetchCatalog(repoUrl).map { plugin ->
+                SitePluginDto(
+                    internalName = plugin.internalName,
+                    name = plugin.name,
+                    version = plugin.version,
+                    fileName = "${plugin.internalName}.cs3",
+                    url = plugin.jarUrl ?: plugin.url,
+                    repositoryUrl = repoUrl,
+                    isInstalled = installedNames.any { it.contains(plugin.internalName) },
+                )
+            }
+            call.respond(PluginCatalogResponse(repoUrl, plugins))
+        } catch (e: Exception) {
+            call.respond(HttpStatusCode.InternalServerError, ActionResult(false, e.message ?: "Failed to fetch catalog"))
         }
-        val installedNames = ServerPluginManager.listInstalled().mapNotNull { it["sourcePlugin"] as? String }
-        val plugins = ServerPluginManager.fetchCatalog(repoUrl).map { plugin ->
-            SitePluginDto(
-                internalName = plugin.internalName,
-                name = plugin.name,
-                version = plugin.version,
-                fileName = "${plugin.internalName}.cs3",
-                url = plugin.jarUrl ?: plugin.url,
-                repositoryUrl = repoUrl,
-                isInstalled = installedNames.any { it.contains(plugin.internalName) },
-            )
-        }
-        call.respond(PluginCatalogResponse(repoUrl, plugins))
     }
 
     get("/api/plugins/installed") {
@@ -80,21 +109,42 @@ fun Route.pluginRoutes() {
     }
 
     post("/api/plugins/install") {
-        val request = call.receive<InstallPluginRequest>()
-        val catalog = ServerPluginManager.fetchCatalog(request.repositoryUrl)
-        val plugin = catalog.firstOrNull { it.internalName == request.internalName }
-        if (plugin == null) {
-            call.respond(ActionResult(false, "Plugin not found in repository"))
-            return@post
+        try {
+            val body = call.receiveText()
+            val node = jacksonMapper.readTree(body)
+            val repositoryUrl = node.get("repositoryUrl")?.asText()?.trim() ?: ""
+            val internalName = node.get("internalName")?.asText()?.trim() ?: ""
+            if (repositoryUrl.isBlank() || internalName.isBlank()) {
+                call.respond(ActionResult(false, "repositoryUrl and internalName are required"))
+                return@post
+            }
+            val catalog = ServerPluginManager.fetchCatalog(repositoryUrl)
+            val plugin = catalog.firstOrNull { it.internalName == internalName }
+            if (plugin == null) {
+                call.respond(ActionResult(false, "Plugin not found in repository"))
+                return@post
+            }
+            val result = ServerPluginManager.install(plugin)
+            call.respond(result.fold({ ActionResult(true) }, { ActionResult(false, it.message) }))
+        } catch (e: Exception) {
+            call.respond(HttpStatusCode.InternalServerError, ActionResult(false, e.message ?: "Install failed"))
         }
-        val result = ServerPluginManager.install(plugin)
-        call.respond(result.fold({ ActionResult(true) }, { ActionResult(false, it.message) }))
     }
 
     post("/api/plugins/uninstall") {
-        val request = call.receive<UninstallPluginRequest>()
-        val result = ServerPluginManager.uninstall(request.internalName)
-        call.respond(result.fold({ ActionResult(true) }, { ActionResult(false, it.message) }))
+        try {
+            val body = call.receiveText()
+            val node = jacksonMapper.readTree(body)
+            val internalName = node.get("internalName")?.asText()?.trim() ?: ""
+            if (internalName.isBlank()) {
+                call.respond(ActionResult(false, "internalName is required"))
+                return@post
+            }
+            val result = ServerPluginManager.uninstall(internalName)
+            call.respond(result.fold({ ActionResult(true) }, { ActionResult(false, it.message) }))
+        } catch (e: Exception) {
+            call.respond(HttpStatusCode.InternalServerError, ActionResult(false, e.message ?: "Uninstall failed"))
+        }
     }
 
     // Web equivalent of desktop's native "Load Local Plugin" file picker.
