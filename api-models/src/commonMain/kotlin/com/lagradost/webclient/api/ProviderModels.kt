@@ -35,3 +35,16 @@ data class HomePageResponseDto(
     val rows: List<MainPageRowDto>,
     val hasNext: Boolean,
 )
+
+/** A single homepage category's metadata, without fetching its items (no network call). */
+@Serializable
+data class MainPageCategoryDto(
+    val index: Int,
+    val name: String,
+    val isHorizontalImages: Boolean = false,
+)
+
+@Serializable
+data class MainPageCategoriesResponse(
+    val categories: List<MainPageCategoryDto>,
+)

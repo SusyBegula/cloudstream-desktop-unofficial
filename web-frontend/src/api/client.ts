@@ -8,6 +8,7 @@ import type {
   InstalledPluginsResponse,
   LinkEventDto,
   LoadResponseDto,
+  MainPageCategoriesResponse,
   PlayableStreamDto,
   PluginCatalogResponse,
   ProviderListResponse,
@@ -45,6 +46,18 @@ class ApiClient {
   async getMainPage(provider: string, page: number = 1): Promise<HomePageResponseDto> {
     return this.fetchJson<HomePageResponseDto>(
       `${this.baseUrl}/api/providers/${encodeURIComponent(provider)}/main-page?page=${page}`
+    );
+  }
+
+  async getMainPageCategories(provider: string): Promise<MainPageCategoriesResponse> {
+    return this.fetchJson<MainPageCategoriesResponse>(
+      `${this.baseUrl}/api/providers/${encodeURIComponent(provider)}/categories`
+    );
+  }
+
+  async getMainPageCategory(provider: string, index: number, page: number = 1): Promise<HomePageResponseDto> {
+    return this.fetchJson<HomePageResponseDto>(
+      `${this.baseUrl}/api/providers/${encodeURIComponent(provider)}/main-page/${index}?page=${page}`
     );
   }
 

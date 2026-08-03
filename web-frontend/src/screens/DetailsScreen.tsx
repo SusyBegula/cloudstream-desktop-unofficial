@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Play, Bookmark, BookmarkCheck, ArrowLeft, Tag } from 'lucide-react';
 import type { EpisodeDto, ExtractorLinkDto, LoadResponseDto, SubtitleFileDto } from '../api/types';
 import api from '../api/client';
@@ -16,6 +16,89 @@ interface DetailsScreenProps {
     episodeDataUrl: string
   ) => void;
 }
+
+interface EpisodeRowProps {
+  ep: EpisodeDto;
+  index: number;
+  onPlay: (ep: EpisodeDto) => void;
+}
+
+// Only fully mounts once it (nearly) scrolls into view — series with hundreds of episodes
+// (long-running dramas/donghua) were rendering every row's DOM upfront, which is unnecessary
+// work when only a handful are ever visible at once.
+const EpisodeRow: React.FC<EpisodeRowProps> = ({ ep, index, onPlay }) => {
+  const [visible, setVisible] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) {
+          setVisible(true);
+          observer.disconnect();
+        }
+      },
+      { rootMargin: '800px 0px' }
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  if (!visible) {
+    return <div ref={ref} style={{ height: '72px', marginBottom: '12px' }} />;
+  }
+
+  return (
+    <div
+      ref={ref}
+      className="glass-panel animate-fade-in"
+      onClick={() => onPlay(ep)}
+      style={{
+        padding: '16px 20px',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        cursor: 'pointer',
+        transition: 'var(--transition-fast)',
+        marginBottom: '12px',
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+        <div
+          style={{
+            width: '40px',
+            height: '40px',
+            borderRadius: 'var(--radius-full)',
+            background: 'rgba(255,255,255,0.08)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontWeight: 700,
+            color: 'var(--accent-cyan)',
+          }}
+        >
+          {ep.episode || index + 1}
+        </div>
+        <div>
+          <div style={{ fontWeight: 700, fontSize: '1.05rem', marginBottom: '2px' }}>
+            {ep.name || `Episode ${ep.episode || index + 1}`}
+          </div>
+          {ep.description && (
+            <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', maxLines: 1 }}>
+              {ep.description}
+            </p>
+          )}
+        </div>
+      </div>
+
+      <button className="btn btn-primary btn-icon" style={{ flexShrink: 0 }}>
+        <Play size={18} fill="#fff" />
+      </button>
+    </div>
+  );
+};
 
 export const DetailsScreen: React.FC<DetailsScreenProps> = ({
   provider,
@@ -36,11 +119,10 @@ export const DetailsScreen: React.FC<DetailsScreenProps> = ({
       setLoading(true);
       setError(null);
       try {
-        const data = await api.load(provider, url);
+        // These two calls are independent — no need to make bookmark status wait behind load.
+        const [data, bRes] = await Promise.all([api.load(provider, url), api.getBookmarks()]);
         setDetails(data);
 
-        // Check bookmark status
-        const bRes = await api.getBookmarks();
         const exists = bRes.bookmarks.some((b) => b.provider === provider && b.url === url);
         setIsBookmarked(exists);
       } catch (err: any) {
@@ -270,53 +352,9 @@ export const DetailsScreen: React.FC<DetailsScreenProps> = ({
           </div>
 
           {/* Episodes List Grid */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column' }}>
             {filteredEpisodes.map((ep, i) => (
-              <div
-                key={i}
-                className="glass-panel animate-fade-in"
-                onClick={() => handlePlayEpisode(ep)}
-                style={{
-                  padding: '16px 20px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  cursor: 'pointer',
-                  transition: 'var(--transition-fast)',
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                  <div
-                    style={{
-                      width: '40px',
-                      height: '40px',
-                      borderRadius: 'var(--radius-full)',
-                      background: 'rgba(255,255,255,0.08)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      fontWeight: 700,
-                      color: 'var(--accent-cyan)',
-                    }}
-                  >
-                    {ep.episode || i + 1}
-                  </div>
-                  <div>
-                    <div style={{ fontWeight: 700, fontSize: '1.05rem', marginBottom: '2px' }}>
-                      {ep.name || `Episode ${ep.episode || i + 1}`}
-                    </div>
-                    {ep.description && (
-                      <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', maxLines: 1 }}>
-                        {ep.description}
-                      </p>
-                    )}
-                  </div>
-                </div>
-
-                <button className="btn btn-primary btn-icon" style={{ flexShrink: 0 }}>
-                  <Play size={18} fill="#fff" />
-                </button>
-              </div>
+              <EpisodeRow key={i} ep={ep} index={i} onPlay={handlePlayEpisode} />
             ))}
           </div>
         </div>

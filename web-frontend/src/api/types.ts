@@ -75,6 +75,16 @@ export interface HomePageResponseDto {
   hasNext: boolean;
 }
 
+export interface MainPageCategoryDto {
+  index: number;
+  name: string;
+  isHorizontalImages?: boolean;
+}
+
+export interface MainPageCategoriesResponse {
+  categories: MainPageCategoryDto[];
+}
+
 export interface SubtitleFileDto {
   lang: string;
   url: string;

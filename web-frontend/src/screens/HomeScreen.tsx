@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Play, ChevronDown, Sparkles, PackagePlus } from 'lucide-react';
-import type { HomePageResponseDto, ProviderDto, SearchResultDto } from '../api/types';
+import type { MainPageCategoryDto, MainPageRowDto, ProviderDto, SearchResultDto } from '../api/types';
 import api from '../api/client';
 
 interface HomeScreenProps {
@@ -8,10 +8,110 @@ interface HomeScreenProps {
   onNavigateToExtensions?: () => void;
 }
 
+interface CategoryRowProps {
+  provider: string;
+  category: MainPageCategoryDto;
+  onSelectMedia: (provider: string, url: string) => void;
+  onLoaded: (index: number, row: MainPageRowDto | null) => void;
+}
+
+// Fetches its own category's items only once it (nearly) scrolls into view, instead of the
+// homepage waiting on every category up front — a provider can have 30+ categories, each a
+// separate network round-trip to the provider site.
+const CategoryRow: React.FC<CategoryRowProps> = ({ provider, category, onSelectMedia, onLoaded }) => {
+  const [row, setRow] = useState<MainPageRowDto | null>(null);
+  const [visible, setVisible] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) {
+          setVisible(true);
+          observer.disconnect();
+        }
+      },
+      { rootMargin: '600px 0px' }
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    if (!visible) return;
+    let cancelled = false;
+    api
+      .getMainPageCategory(provider, category.index)
+      .then((data) => {
+        if (cancelled) return;
+        const loaded = data.rows[0] ?? null;
+        setRow(loaded);
+        onLoaded(category.index, loaded);
+      })
+      .catch(() => {
+        if (!cancelled) onLoaded(category.index, null);
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visible, provider, category.index]);
+
+  if (row && row.items.length === 0) return null;
+
+  return (
+    <div ref={containerRef} style={{ marginBottom: '36px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+        <h3 style={{ fontSize: '1.35rem', fontWeight: 700 }}>{row?.name || category.name}</h3>
+      </div>
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))',
+          gap: '20px',
+        }}
+      >
+        {row
+          ? row.items.map((item, itemIdx) => (
+              <div
+                key={itemIdx}
+                className="poster-card animate-fade-in"
+                onClick={() => onSelectMedia(provider, item.url)}
+              >
+                <img
+                  src={item.posterUrl || 'https://via.placeholder.com/300x450?text=No+Poster'}
+                  alt={item.name}
+                  loading="lazy"
+                />
+                {item.quality && <div className="poster-badge">{item.quality}</div>}
+                <div className="poster-overlay">
+                  <div className="poster-title">{item.name}</div>
+                  <div className="poster-meta">
+                    {item.year && <span>{item.year}</span>}
+                    {item.type && <span>• {item.type}</span>}
+                  </div>
+                </div>
+              </div>
+            ))
+          : Array.from({ length: 6 }).map((_, i) => (
+              <div
+                key={i}
+                className="poster-card"
+                style={{ background: 'rgba(255,255,255,0.05)', aspectRatio: '2 / 3' }}
+              />
+            ))}
+      </div>
+    </div>
+  );
+};
+
 export const HomeScreen: React.FC<HomeScreenProps> = ({ onSelectMedia, onNavigateToExtensions }) => {
   const [providers, setProviders] = useState<ProviderDto[]>([]);
   const [selectedProvider, setSelectedProvider] = useState<string>('');
-  const [homeData, setHomeData] = useState<HomePageResponseDto | null>(null);
+  const [categories, setCategories] = useState<MainPageCategoryDto[]>([]);
+  const [loadedRows, setLoadedRows] = useState<Record<number, MainPageRowDto | null>>({});
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -35,26 +135,32 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onSelectMedia, onNavigat
     loadProviders();
   }, []);
 
-  // Fetch Homepage Data when selected provider changes
+  // Fetch just the category list (instant, no network calls to the provider site) when the
+  // selected provider changes. Each category's items are fetched lazily by CategoryRow.
   useEffect(() => {
     if (!selectedProvider) return;
-    async function fetchHome() {
+    async function fetchCategories() {
       setLoading(true);
       setError(null);
+      setLoadedRows({});
       try {
-        const data = await api.getMainPage(selectedProvider);
-        setHomeData(data);
+        const data = await api.getMainPageCategories(selectedProvider);
+        setCategories(data.categories);
       } catch (err: any) {
         setError(err.message || 'Failed to load homepage content');
       } finally {
         setLoading(false);
       }
     }
-    fetchHome();
+    fetchCategories();
   }, [selectedProvider]);
 
+  const handleRowLoaded = (index: number, row: MainPageRowDto | null) => {
+    setLoadedRows((prev) => ({ ...prev, [index]: row }));
+  };
+
   const featuredItem: SearchResultDto | null =
-    homeData?.rows[0]?.items[0] || null;
+    categories.length > 0 ? loadedRows[categories[0].index]?.items[0] || null : null;
 
   return (
     <div style={{ paddingBottom: '60px' }}>
@@ -205,42 +311,15 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onSelectMedia, onNavigat
             </div>
           )}
 
-          {/* Rows / Carousels */}
-          {homeData?.rows.map((row, rowIdx) => (
-            <div key={rowIdx} style={{ marginBottom: '36px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
-                <h3 style={{ fontSize: '1.35rem', fontWeight: 700 }}>{row.name}</h3>
-              </div>
-              <div
-                style={{
-                  display: 'grid',
-                  gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))',
-                  gap: '20px',
-                }}
-              >
-                {row.items.map((item, itemIdx) => (
-                  <div
-                    key={itemIdx}
-                    className="poster-card animate-fade-in"
-                    onClick={() => onSelectMedia(selectedProvider, item.url)}
-                  >
-                    <img
-                      src={item.posterUrl || 'https://via.placeholder.com/300x450?text=No+Poster'}
-                      alt={item.name}
-                      loading="lazy"
-                    />
-                    {item.quality && <div className="poster-badge">{item.quality}</div>}
-                    <div className="poster-overlay">
-                      <div className="poster-title">{item.name}</div>
-                      <div className="poster-meta">
-                        {item.year && <span>{item.year}</span>}
-                        {item.type && <span>• {item.type}</span>}
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
+          {/* Rows / Carousels, each lazily fetching its own items as it scrolls into view */}
+          {categories.map((category) => (
+            <CategoryRow
+              key={category.index}
+              provider={selectedProvider}
+              category={category}
+              onSelectMedia={onSelectMedia}
+              onLoaded={handleRowLoaded}
+            />
           ))}
         </>
       )}
