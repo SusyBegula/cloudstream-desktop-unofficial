@@ -23,8 +23,87 @@ type Screen =
   | { type: 'library' }
   | { type: 'extensions' };
 
+function screenToUrl(screen: Screen): string {
+  switch (screen.type) {
+    case 'home':
+      return '/';
+    case 'library':
+      return '/my-list';
+    case 'extensions':
+      return '/extensions';
+    case 'details':
+      return `/details?provider=${encodeURIComponent(screen.provider)}&url=${encodeURIComponent(screen.url)}`;
+    case 'player': {
+      const params = new URLSearchParams();
+      params.set('provider', screen.provider);
+      params.set('url', screen.episodeDataUrl);
+      if (screen.title) params.set('title', screen.title);
+      if (screen.subtitleText) params.set('subTitle', screen.subtitleText);
+      return `/player?${params.toString()}`;
+    }
+  }
+}
+
+function urlToScreen(): Screen {
+  const path = window.location.pathname;
+  const params = new URLSearchParams(window.location.search);
+
+  if (path === '/my-list' || path === '/library') {
+    return { type: 'library' };
+  }
+  if (path === '/extensions') {
+    return { type: 'extensions' };
+  }
+  if (path === '/details') {
+    const provider = params.get('provider');
+    const url = params.get('url');
+    if (provider && url) {
+      return { type: 'details', provider, url };
+    }
+  }
+  if (path === '/player') {
+    const provider = params.get('provider');
+    const url = params.get('url');
+    const title = params.get('title') || 'Streaming Video';
+    const subtitleText = params.get('subTitle') || undefined;
+    if (provider && url) {
+      return {
+        type: 'player',
+        title,
+        subtitleText,
+        availableLinks: [],
+        subtitles: [],
+        provider,
+        episodeDataUrl: url,
+      };
+    }
+  }
+  return { type: 'home' };
+}
+
 export const App: React.FC = () => {
-  const [currentScreen, setCurrentScreen] = useState<Screen>({ type: 'home' });
+  const [currentScreen, setCurrentScreen] = useState<Screen>(urlToScreen);
+
+  // Sync state changes to browser URL & back button navigation
+  const navigateTo = (screen: Screen, replace: boolean = false) => {
+    setCurrentScreen(screen);
+    const targetUrl = screenToUrl(screen);
+    if (window.location.pathname + window.location.search !== targetUrl) {
+      if (replace) {
+        window.history.replaceState(screen, '', targetUrl);
+      } else {
+        window.history.pushState(screen, '', targetUrl);
+      }
+    }
+  };
+
+  useEffect(() => {
+    const handlePopState = () => {
+      setCurrentScreen(urlToScreen());
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
 
   // Providers & Provider Selector state
   const [providers, setProviders] = useState<ProviderDto[]>([]);
@@ -101,7 +180,7 @@ export const App: React.FC = () => {
             {/* Netflix Brand Logo */}
             <div
               style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}
-              onClick={() => setCurrentScreen({ type: 'home' })}
+              onClick={() => navigateTo({ type: 'home' })}
             >
               <div
                 style={{
@@ -134,7 +213,7 @@ export const App: React.FC = () => {
                   cursor: 'pointer',
                   transition: 'color 0.2s',
                 }}
-                onClick={() => setCurrentScreen({ type: 'home' })}
+                onClick={() => navigateTo({ type: 'home' })}
               >
                 Home
               </span>
@@ -147,7 +226,7 @@ export const App: React.FC = () => {
                   cursor: 'pointer',
                   transition: 'color 0.2s',
                 }}
-                onClick={() => setCurrentScreen({ type: 'library' })}
+                onClick={() => navigateTo({ type: 'library' })}
               >
                 My List
               </span>
@@ -160,7 +239,7 @@ export const App: React.FC = () => {
                   cursor: 'pointer',
                   transition: 'color 0.2s',
                 }}
-                onClick={() => setCurrentScreen({ type: 'extensions' })}
+                onClick={() => navigateTo({ type: 'extensions' })}
               >
                 Extensions
               </span>
@@ -250,8 +329,8 @@ export const App: React.FC = () => {
             selectedProvider={selectedProvider}
             onSelectProvider={setSelectedProvider}
             providers={providers}
-            onSelectMedia={(provider, url) => setCurrentScreen({ type: 'details', provider, url })}
-            onNavigateToExtensions={() => setCurrentScreen({ type: 'extensions' })}
+            onSelectMedia={(provider, url) => navigateTo({ type: 'details', provider, url })}
+            onNavigateToExtensions={() => navigateTo({ type: 'extensions' })}
           />
         )}
 
@@ -259,9 +338,9 @@ export const App: React.FC = () => {
           <DetailsScreen
             provider={currentScreen.provider}
             url={currentScreen.url}
-            onBack={() => setCurrentScreen({ type: 'home' })}
+            onBack={() => navigateTo({ type: 'home' })}
             onStartPlayback={(title, subtitleText, availableLinks, subtitles, provider, episodeDataUrl) =>
-              setCurrentScreen({
+              navigateTo({
                 type: 'player',
                 title,
                 subtitleText,
@@ -282,18 +361,19 @@ export const App: React.FC = () => {
             subtitles={currentScreen.subtitles}
             provider={currentScreen.provider}
             episodeDataUrl={currentScreen.episodeDataUrl}
-            onBack={() => setCurrentScreen({ type: 'home' })}
+            onBack={() => navigateTo({ type: 'home' })}
           />
         )}
 
         {currentScreen.type === 'library' && (
           <LibraryScreen
-            onSelectMedia={(provider, url) => setCurrentScreen({ type: 'details', provider, url })}
+            onSelectMedia={(provider, url) => navigateTo({ type: 'details', provider, url })}
           />
         )}
 
         {currentScreen.type === 'extensions' && <ExtensionsScreen />}
       </main>
+
 
       {/* Command Palette Search Overlay */}
       {showSearchModal && (
@@ -398,7 +478,7 @@ export const App: React.FC = () => {
                       className="poster-card animate-fade-in"
                       onClick={() => {
                         setShowSearchModal(false);
-                        setCurrentScreen({ type: 'details', provider: item.apiName, url: item.url });
+                        navigateTo({ type: 'details', provider: item.apiName, url: item.url });
                       }}
                     >
                       <img src={item.posterUrl || 'https://via.placeholder.com/300x450'} alt={item.name} />
