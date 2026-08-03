@@ -95,7 +95,6 @@ const EpisodeRow: React.FC<EpisodeRowProps> = ({ ep, index, onPlay }) => {
     </div>
   );
 };
-
 export const DetailsScreen: React.FC<DetailsScreenProps> = ({
   provider,
   url,
@@ -127,6 +126,18 @@ export const DetailsScreen: React.FC<DetailsScreenProps> = ({
     fetchDetails();
   }, [provider, url]);
 
+  // Auto-set selectedSeason to match available seasons
+  useEffect(() => {
+    if (details?.episodes && details.episodes.length > 0) {
+      const seasons = Array.from(
+        new Set(details.episodes.map((e) => (e.season !== undefined && e.season !== null ? e.season : 1)))
+      ).sort((a, b) => a - b);
+      if (seasons.length > 0 && !seasons.includes(selectedSeason)) {
+        setSelectedSeason(seasons[0]);
+      }
+    }
+  }, [details]);
+
   const toggleBookmark = async () => {
     if (!details) return;
     try {
@@ -151,8 +162,9 @@ export const DetailsScreen: React.FC<DetailsScreenProps> = ({
   const handlePlayEpisode = (ep?: EpisodeDto) => {
     if (!details) return;
 
-    const dataUrl = ep ? ep.data : details.dataUrl || url;
-    const epTitle = ep ? `S${ep.season || 1} E${ep.episode || 1}: ${ep.name || 'Episode'}` : details.name;
+    const targetEp = ep || (details.episodes && details.episodes.length > 0 ? details.episodes[0] : undefined);
+    const dataUrl = targetEp ? targetEp.data : details.dataUrl || url;
+    const epTitle = targetEp ? `S${targetEp.season || 1} E${targetEp.episode || 1}: ${targetEp.name || 'Episode'}` : details.name;
 
     setExtractingLinks(true);
 
@@ -172,7 +184,7 @@ export const DetailsScreen: React.FC<DetailsScreenProps> = ({
           setExtractingLinks(false);
           onStartPlayback(
             details.name,
-            ep ? epTitle : undefined,
+            targetEp ? epTitle : undefined,
             collectedLinks,
             collectedSubs,
             provider,
@@ -208,11 +220,19 @@ export const DetailsScreen: React.FC<DetailsScreenProps> = ({
   }
 
   const seasonsList = Array.from(
-    new Set(details.episodes?.map((e) => e.season || 1) || [1])
+    new Set(details.episodes?.map((e) => (e.season !== undefined && e.season !== null ? e.season : 1)) || [1])
   ).sort((a, b) => a - b);
 
-  const filteredEpisodes =
-    details.episodes?.filter((e) => (e.season || 1) === selectedSeason) || [];
+  const filteredEpisodes = details.episodes
+    ? seasonsList.length <= 1
+      ? details.episodes
+      : details.episodes.filter((e) => {
+          const epSeason = e.season !== undefined && e.season !== null ? e.season : 1;
+          return epSeason === selectedSeason;
+        })
+    : [];
+
+  const firstEp = details.episodes && details.episodes.length > 0 ? details.episodes[0] : null;
 
   return (
     <div style={{ paddingBottom: '80px', paddingTop: '68px' }}>
@@ -301,17 +321,21 @@ export const DetailsScreen: React.FC<DetailsScreenProps> = ({
 
           {/* Primary Action Controls */}
           <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap', alignItems: 'center' }}>
-            {details.kind !== 'series' && (
-              <button
-                className="btn btn-netflix-white"
-                onClick={() => handlePlayEpisode()}
-                disabled={extractingLinks}
-                style={{ padding: '14px 36px', fontSize: '1.05rem' }}
-              >
-                {extractingLinks ? <div className="spinner" style={{ width: 20, height: 20 }} /> : <Play size={22} fill="#000" style={{ marginLeft: 2 }} />}
-                <span>{extractingLinks ? 'Extracting Streams...' : 'Play Movie'}</span>
-              </button>
-            )}
+            <button
+              className="btn btn-netflix-white"
+              onClick={() => handlePlayEpisode(firstEp || undefined)}
+              disabled={extractingLinks}
+              style={{ padding: '14px 36px', fontSize: '1.05rem' }}
+            >
+              {extractingLinks ? <div className="spinner" style={{ width: 20, height: 20 }} /> : <Play size={22} fill="#000" style={{ marginLeft: 2 }} />}
+              <span>
+                {extractingLinks
+                  ? 'Extracting Streams...'
+                  : firstEp
+                  ? `Play ${firstEp.name || `Episode ${firstEp.episode || 1}`}`
+                  : 'Play Stream'}
+              </span>
+            </button>
 
             <button
               className="btn btn-netflix-dark"
@@ -326,62 +350,72 @@ export const DetailsScreen: React.FC<DetailsScreenProps> = ({
       </div>
 
       {/* Episode Browser Section */}
-      {(details.kind === 'series' || (details.episodes && details.episodes.length > 0)) && (
-        <div style={{ padding: '0 4%' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px', flexWrap: 'wrap', gap: '16px' }}>
-            <h2 style={{ fontSize: '1.8rem', fontWeight: 800 }}>Episodes</h2>
+      <div style={{ padding: '0 4%' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px', flexWrap: 'wrap', gap: '16px' }}>
+          <h2 style={{ fontSize: '1.8rem', fontWeight: 800 }}>Episodes</h2>
 
-            {/* Netflix Season Selector Dropdown */}
-            {seasonsList.length > 1 && (
-              <div style={{ position: 'relative' }}>
-                <select
-                  value={selectedSeason}
-                  onChange={(e) => setSelectedSeason(Number(e.target.value))}
-                  style={{
-                    backgroundColor: '#242424',
-                    color: '#fff',
-                    border: '1px solid rgba(255,255,255,0.2)',
-                    borderRadius: 'var(--radius-sm)',
-                    padding: '10px 40px 10px 16px',
-                    fontSize: '1rem',
-                    fontWeight: 700,
-                    appearance: 'none',
-                    cursor: 'pointer',
-                    outline: 'none',
-                  }}
-                >
-                  {seasonsList.map((s) => (
-                    <option key={s} value={s}>
-                      Season {s}
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown
-                  size={18}
-                  style={{
-                    position: 'absolute',
-                    right: 12,
-                    top: '50%',
-                    transform: 'translateY(-50%)',
-                    pointerEvents: 'none',
-                    color: '#fff',
-                  }}
-                />
-              </div>
-            )}
-          </div>
+          {/* Netflix Season Selector Dropdown */}
+          {seasonsList.length > 1 && (
+            <div style={{ position: 'relative' }}>
+              <select
+                value={selectedSeason}
+                onChange={(e) => setSelectedSeason(Number(e.target.value))}
+                style={{
+                  backgroundColor: '#242424',
+                  color: '#fff',
+                  border: '1px solid rgba(255,255,255,0.2)',
+                  borderRadius: 'var(--radius-sm)',
+                  padding: '10px 40px 10px 16px',
+                  fontSize: '1rem',
+                  fontWeight: 700,
+                  appearance: 'none',
+                  cursor: 'pointer',
+                  outline: 'none',
+                }}
+              >
+                {seasonsList.map((s) => (
+                  <option key={s} value={s}>
+                    Season {s}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown
+                size={18}
+                style={{
+                  position: 'absolute',
+                  right: 12,
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  pointerEvents: 'none',
+                  color: '#fff',
+                }}
+              />
+            </div>
+          )}
+        </div>
 
-          {/* Episode Cards */}
+        {/* Episode Cards List */}
+        {filteredEpisodes.length > 0 ? (
           <div style={{ display: 'flex', flexDirection: 'column' }}>
             {filteredEpisodes.map((ep, i) => (
               <EpisodeRow key={i} ep={ep} index={i} onPlay={handlePlayEpisode} />
             ))}
           </div>
-        </div>
-      )}
+        ) : (
+          <div style={{ padding: '36px', backgroundColor: '#181818', borderRadius: 'var(--radius-sm)', textAlign: 'center', border: '1px solid rgba(255,255,255,0.05)' }}>
+            <p style={{ color: 'var(--text-muted)', fontSize: '1rem', marginBottom: '16px' }}>
+              No individual episode entries were listed by this provider.
+            </p>
+            <button className="btn btn-netflix-white" onClick={() => handlePlayEpisode()}>
+              <Play size={18} fill="#000" /> Play Main Stream Link
+            </button>
+          </div>
+        )}
+      </div>
     </div>
   );
 };
 
 export default DetailsScreen;
+
 
