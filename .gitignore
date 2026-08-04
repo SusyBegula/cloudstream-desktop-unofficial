@@ -50,3 +50,5 @@ test-repos/
 .gemini/
 .claude
 .serena
+CLAUDE.md
+.rtk

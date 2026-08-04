@@ -5,6 +5,7 @@ plugins {
 dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.8.0")
     implementation(libs.nicehttp)
+    implementation(libs.kotlinx.serialization.json)
 
     val ktorVersion = "3.0.3"
     implementation("io.ktor:ktor-server-core:$ktorVersion")

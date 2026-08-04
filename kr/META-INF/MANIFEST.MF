@@ -1,0 +1,8 @@
+Manifest-Version: 1.0
+Implementation-Vendor: JetBrains
+Implementation-Title: kotlin-reflect
+Implementation-Version: 2.3.20-release-208
+Kotlin-Runtime-Component: Main
+Kotlin-Version: 2.3
+Multi-Release: true
+

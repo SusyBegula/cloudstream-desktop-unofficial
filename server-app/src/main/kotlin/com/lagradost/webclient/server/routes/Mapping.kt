@@ -23,6 +23,8 @@ import com.lagradost.webclient.api.SearchResultDto
 import com.lagradost.webclient.api.SubtitleFileDto
 import com.lagradost.webclient.api.BookmarkDto
 import com.lagradost.webclient.api.WatchHistoryEntryDto
+import com.lagradost.webclient.api.PreferredSourceDto
+import com.lagradost.common.storage.PreferredSource
 import com.lagradost.common.storage.DesktopBookmark
 import com.lagradost.common.storage.WatchHistory
 
@@ -45,6 +47,12 @@ fun WatchHistory.toDto(): WatchHistoryEntryDto = WatchHistoryEntryDto(
     positionMs = position * 1000,
     durationMs = duration * 1000,
     updatedAt = updateTime,
+)
+
+fun PreferredSource.toDto(): PreferredSourceDto = PreferredSourceDto(
+    provider = provider,
+    seriesUrl = showUrl,
+    sourceName = sourceName,
 )
 
 /**

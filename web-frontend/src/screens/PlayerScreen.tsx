@@ -10,6 +10,13 @@ interface PlayerScreenProps {
   subtitles: SubtitleFileDto[];
   provider: string;
   episodeDataUrl: string;
+  /** The show/movie's own page URL — used as the watch-history key so "Continue Watching" on
+   * the details page can find this title regardless of which episode was actually played. */
+  seriesUrl: string;
+  posterUrl?: string;
+  season?: number;
+  episode?: number;
+  startPositionMs?: number;
   onBack: () => void;
 }
 
@@ -20,17 +27,78 @@ export const PlayerScreen: React.FC<PlayerScreenProps> = ({
   subtitles,
   provider,
   episodeDataUrl,
+  seriesUrl,
+  posterUrl,
+  season,
+  episode,
+  startPositionMs,
   onBack,
 }) => {
-  const [selectedLink, setSelectedLink] = useState<ExtractorLinkDto | null>(
-    availableLinks[0] || null
-  );
+  const [selectedLink, setSelectedLink] = useState<ExtractorLinkDto | null>(null);
+  const [linkInitialized, setLinkInitialized] = useState<boolean>(false);
+  const [preferredSourceName, setPreferredSourceName] = useState<string | null>(null);
   const [resolvedStream, setResolvedStream] = useState<PlayableStreamDto | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Pick the initial link: prefer whatever's been remembered for this show (see the "Remember
+  // choice" control in VideoPlayer), falling back to the first available link if that source
+  // isn't among this episode's links (or nothing's been remembered at all).
+  useEffect(() => {
+    let cancelled = false;
+
+    async function pickInitialLink() {
+      if (availableLinks.length === 0) {
+        if (!cancelled) {
+          setSelectedLink(null);
+          setLinkInitialized(true);
+        }
+        return;
+      }
+
+      let pref: string | null = null;
+      try {
+        const dto = await api.getPreferredSource(provider, seriesUrl);
+        pref = dto?.sourceName ?? null;
+      } catch (err) {
+        console.error('Failed to load preferred source:', err);
+      }
+
+      if (cancelled) return;
+      setPreferredSourceName(pref);
+      const match = pref ? availableLinks.find((l) => l.source === pref) : undefined;
+      setSelectedLink(match || availableLinks[0]);
+      setLinkInitialized(true);
+    }
+
+    pickInitialLink();
+    return () => {
+      cancelled = true;
+    };
+  }, [availableLinks, provider, seriesUrl]);
+
+  const handleSetPreferredSource = async (sourceName: string) => {
+    try {
+      await api.setPreferredSource({ provider, seriesUrl, sourceName });
+      setPreferredSourceName(sourceName);
+    } catch (err) {
+      console.error('Failed to remember source choice:', err);
+    }
+  };
+
+  const handleClearPreferredSource = async () => {
+    try {
+      await api.clearPreferredSource(provider, seriesUrl);
+      setPreferredSourceName(null);
+    } catch (err) {
+      console.error('Failed to forget source choice:', err);
+    }
+  };
+
   // Resolve link through Ktor proxy API /api/resolve
   useEffect(() => {
+    if (!linkInitialized) return;
+
     if (!selectedLink) {
       setError('No playable stream links found for this title.');
       setLoading(false);
@@ -52,16 +120,19 @@ export const PlayerScreen: React.FC<PlayerScreenProps> = ({
     }
 
     resolveCurrentLink();
-  }, [selectedLink]);
+  }, [selectedLink, linkInitialized]);
 
   const handleProgressUpdate = (positionMs: number, durationMs: number) => {
     if (positionMs <= 0 || durationMs <= 0) return;
     // Throttle progress updates to backend
     api.patchHistory({
       provider,
-      url: episodeDataUrl,
+      url: seriesUrl,
       name: title,
+      posterUrl,
       episodeData: episodeDataUrl,
+      season,
+      episode,
       positionMs: Math.floor(positionMs),
       durationMs: Math.floor(durationMs),
       updatedAt: Date.now(),
@@ -138,8 +209,13 @@ export const PlayerScreen: React.FC<PlayerScreenProps> = ({
       onSelectLink={setSelectedLink}
       title={title}
       subtitleText={subtitleText}
+      startPositionMs={startPositionMs}
       onBack={onBack}
       onProgressUpdate={handleProgressUpdate}
+      onResolveAt={(startSeconds) => api.resolve(selectedLink!, startSeconds)}
+      preferredSourceName={preferredSourceName}
+      onSetPreferredSource={handleSetPreferredSource}
+      onClearPreferredSource={handleClearPreferredSource}
     />
   );
 };

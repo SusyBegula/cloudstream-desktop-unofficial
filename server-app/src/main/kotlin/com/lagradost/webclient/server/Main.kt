@@ -9,6 +9,7 @@ import com.lagradost.webclient.server.routes.historyRoutes
 import com.lagradost.webclient.server.routes.imageRoutes
 import com.lagradost.webclient.server.routes.linksRoutes
 import com.lagradost.webclient.server.routes.pluginRoutes
+import com.lagradost.webclient.server.routes.preferredSourceRoutes
 import com.lagradost.webclient.server.routes.providerRoutes
 import com.lagradost.webclient.server.routes.resolveRoutes
 import com.lagradost.webclient.server.routes.searchRoutes
@@ -124,6 +125,7 @@ fun main() {
             historyRoutes()
             bookmarksRoutes()
             pluginRoutes()
+            preferredSourceRoutes()
         }
     }.start(wait = true)
 }

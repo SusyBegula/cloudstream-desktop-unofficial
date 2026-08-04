@@ -1,29 +1,92 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Play, Plus, Check, ArrowLeft, ChevronDown } from 'lucide-react';
-import type { EpisodeDto, ExtractorLinkDto, LoadResponseDto, SubtitleFileDto } from '../api/types';
+import { Play, Plus, Check, ArrowLeft, ChevronDown, Search } from 'lucide-react';
+import type { EpisodeDto, ExtractorLinkDto, LoadResponseDto, SubtitleFileDto, WatchHistoryEntryDto } from '../api/types';
 import api from '../api/client';
+
+export interface StartPlaybackParams {
+  title: string;
+  subtitleText?: string;
+  availableLinks: ExtractorLinkDto[];
+  subtitles: SubtitleFileDto[];
+  provider: string;
+  episodeDataUrl: string;
+  /** The show/movie's own page URL — distinct from episodeDataUrl — so watch history can be
+   * matched back to "has this title been seen before" regardless of which episode played. */
+  seriesUrl: string;
+  posterUrl?: string;
+  season?: number;
+  episode?: number;
+  startPositionMs?: number;
+}
 
 interface DetailsScreenProps {
   provider: string;
   url: string;
   onBack: () => void;
-  onStartPlayback: (
-    title: string,
-    subtitleText: string | undefined,
-    initialLinks: ExtractorLinkDto[],
-    initialSubtitles: SubtitleFileDto[],
-    providerName: string,
-    episodeDataUrl: string
-  ) => void;
+  onStartPlayback: (params: StartPlaybackParams) => void;
+}
+
+// A show/movie counts as "completed" past this percent — Continue Watching then advances to the
+// next episode (if any) instead of resuming inside the one already finished.
+const COMPLETED_PERCENT = 95;
+
+/** The most recently watched episode/position for this title, or null if never watched. */
+function getContinueTarget(
+  history: WatchHistoryEntryDto[],
+  provider: string,
+  seriesUrl: string,
+  episodes: EpisodeDto[] | null | undefined
+): { episode: EpisodeDto | null; resumeMs: number } | null {
+  const matches = history.filter((h) => h.provider === provider && h.url === seriesUrl);
+  if (matches.length === 0) return null;
+
+  const latest = matches.reduce((a, b) => (a.updatedAt > b.updatedAt ? a : b));
+  const percent = latest.durationMs > 0 ? (latest.positionMs / latest.durationMs) * 100 : 0;
+  const completed = percent >= COMPLETED_PERCENT;
+
+  if (!episodes || episodes.length === 0) {
+    // Movie: nothing to advance to — a finished movie just plays fresh from the start again.
+    return completed ? null : { episode: null, resumeMs: latest.positionMs };
+  }
+
+  const matchedIndex = episodes.findIndex(
+    (e) => (e.season ?? 1) === (latest.season ?? 1) && e.episode === latest.episode
+  );
+  if (matchedIndex === -1) return null;
+
+  if (completed) {
+    const next = episodes[matchedIndex + 1];
+    return next ? { episode: next, resumeMs: 0 } : null;
+  }
+  return { episode: episodes[matchedIndex], resumeMs: latest.positionMs };
+}
+
+/** Watch percent (0-100) for one specific episode, or 0 if never watched. */
+function getEpisodeProgress(
+  history: WatchHistoryEntryDto[],
+  provider: string,
+  seriesUrl: string,
+  ep: EpisodeDto
+): number {
+  const entry = history.find(
+    (h) =>
+      h.provider === provider &&
+      h.url === seriesUrl &&
+      (h.season ?? 1) === (ep.season ?? 1) &&
+      h.episode === ep.episode
+  );
+  if (!entry || entry.durationMs <= 0) return 0;
+  return Math.min(100, Math.round((entry.positionMs / entry.durationMs) * 100));
 }
 
 interface EpisodeRowProps {
   ep: EpisodeDto;
   index: number;
   onPlay: (ep: EpisodeDto) => void;
+  progressPercent: number;
 }
 
-const EpisodeRow: React.FC<EpisodeRowProps> = ({ ep, index, onPlay }) => {
+const EpisodeRow: React.FC<EpisodeRowProps> = ({ ep, index, onPlay, progressPercent }) => {
   const [visible, setVisible] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -65,7 +128,7 @@ const EpisodeRow: React.FC<EpisodeRowProps> = ({ ep, index, onPlay }) => {
         border: '1px solid rgba(255,255,255,0.05)',
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '20px', flex: 1, minWidth: 0 }}>
         <div
           style={{
             fontSize: '1.4rem',
@@ -73,11 +136,46 @@ const EpisodeRow: React.FC<EpisodeRowProps> = ({ ep, index, onPlay }) => {
             color: 'var(--text-muted)',
             width: '32px',
             textAlign: 'center',
+            flexShrink: 0,
           }}
         >
           {ep.episode || index + 1}
         </div>
-        <div>
+
+        {/* Thumbnail with watch-progress bar, Netflix-style */}
+        <div
+          style={{
+            position: 'relative',
+            width: '160px',
+            height: '90px',
+            flexShrink: 0,
+            borderRadius: 'var(--radius-sm)',
+            overflow: 'hidden',
+            backgroundColor: '#000',
+          }}
+        >
+          <img
+            src={ep.posterUrl || 'https://via.placeholder.com/320x180'}
+            alt={ep.name || `Episode ${ep.episode || index + 1}`}
+            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+          />
+          {progressPercent > 0 && (
+            <div
+              style={{
+                position: 'absolute',
+                bottom: 0,
+                left: 0,
+                right: 0,
+                height: '4px',
+                background: 'rgba(255,255,255,0.3)',
+              }}
+            >
+              <div style={{ width: `${progressPercent}%`, height: '100%', background: 'var(--netflix-red)' }} />
+            </div>
+          )}
+        </div>
+
+        <div style={{ minWidth: 0 }}>
           <div style={{ fontWeight: 700, fontSize: '1.1rem', marginBottom: '4px', color: '#fff' }}>
             {ep.name || `Episode ${ep.episode || index + 1}`}
           </div>
@@ -107,16 +205,19 @@ export const DetailsScreen: React.FC<DetailsScreenProps> = ({
   const [isBookmarked, setIsBookmarked] = useState<boolean>(false);
   const [selectedSeason, setSelectedSeason] = useState<number>(1);
   const [extractingLinks, setExtractingLinks] = useState<boolean>(false);
+  const [history, setHistory] = useState<WatchHistoryEntryDto[]>([]);
+  const [episodeSearchQuery, setEpisodeSearchQuery] = useState<string>('');
 
   useEffect(() => {
     async function fetchDetails() {
       setLoading(true);
       setError(null);
       try {
-        const [data, bRes] = await Promise.all([api.load(provider, url), api.getBookmarks()]);
+        const [data, bRes, hRes] = await Promise.all([api.load(provider, url), api.getBookmarks(), api.getHistory()]);
         setDetails(data);
         const exists = bRes.bookmarks.some((b) => b.provider === provider && b.url === url);
         setIsBookmarked(exists);
+        setHistory(hRes.entries);
       } catch (err: any) {
         setError(err.message || 'Failed to load details');
       } finally {
@@ -159,7 +260,7 @@ export const DetailsScreen: React.FC<DetailsScreenProps> = ({
     }
   };
 
-  const handlePlayEpisode = (ep?: EpisodeDto) => {
+  const handlePlayEpisode = (ep?: EpisodeDto, resumeMs: number = 0) => {
     if (!details) return;
 
     const targetEp = ep || (details.episodes && details.episodes.length > 0 ? details.episodes[0] : undefined);
@@ -182,14 +283,19 @@ export const DetailsScreen: React.FC<DetailsScreenProps> = ({
         } else if (event.kind === 'done' || event.kind === 'error') {
           cancelWs();
           setExtractingLinks(false);
-          onStartPlayback(
-            details.name,
-            targetEp ? epTitle : undefined,
-            collectedLinks,
-            collectedSubs,
+          onStartPlayback({
+            title: details.name,
+            subtitleText: targetEp ? epTitle : undefined,
+            availableLinks: collectedLinks,
+            subtitles: collectedSubs,
             provider,
-            dataUrl
-          );
+            episodeDataUrl: dataUrl,
+            seriesUrl: url,
+            posterUrl: details.posterUrl || undefined,
+            season: targetEp?.season ?? undefined,
+            episode: targetEp?.episode ?? undefined,
+            startPositionMs: resumeMs,
+          });
         }
       },
       (err) => {
@@ -198,6 +304,8 @@ export const DetailsScreen: React.FC<DetailsScreenProps> = ({
       }
     );
   };
+
+  const continueTarget = details ? getContinueTarget(history, provider, url, details.episodes) : null;
 
   if (loading) {
     return (
@@ -231,6 +339,17 @@ export const DetailsScreen: React.FC<DetailsScreenProps> = ({
           return epSeason === selectedSeason;
         })
     : [];
+
+  const searchedEpisodes = episodeSearchQuery.trim()
+    ? filteredEpisodes.filter((e) => {
+        const q = episodeSearchQuery.trim().toLowerCase();
+        return (
+          (e.name || '').toLowerCase().includes(q) ||
+          (e.description || '').toLowerCase().includes(q) ||
+          String(e.episode ?? '').includes(q)
+        );
+      })
+    : filteredEpisodes;
 
   const firstEp = details.episodes && details.episodes.length > 0 ? details.episodes[0] : null;
 
@@ -323,7 +442,7 @@ export const DetailsScreen: React.FC<DetailsScreenProps> = ({
           <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap', alignItems: 'center' }}>
             <button
               className="btn btn-netflix-white"
-              onClick={() => handlePlayEpisode(firstEp || undefined)}
+              onClick={() => handlePlayEpisode(continueTarget?.episode || firstEp || undefined, continueTarget?.resumeMs || 0)}
               disabled={extractingLinks}
               style={{ padding: '14px 36px', fontSize: '1.05rem' }}
             >
@@ -331,6 +450,10 @@ export const DetailsScreen: React.FC<DetailsScreenProps> = ({
               <span>
                 {extractingLinks
                   ? 'Extracting Streams...'
+                  : continueTarget
+                  ? continueTarget.episode
+                    ? `Continue S${continueTarget.episode.season || 1} E${continueTarget.episode.episode || 1}: ${continueTarget.episode.name || 'Episode'}`
+                    : 'Continue Watching'
                   : firstEp
                   ? `Play ${firstEp.name || `Episode ${firstEp.episode || 1}`}`
                   : 'Play Stream'}
@@ -354,52 +477,92 @@ export const DetailsScreen: React.FC<DetailsScreenProps> = ({
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px', flexWrap: 'wrap', gap: '16px' }}>
           <h2 style={{ fontSize: '1.8rem', fontWeight: 800 }}>Episodes</h2>
 
-          {/* Netflix Season Selector Dropdown */}
-          {seasonsList.length > 1 && (
-            <div style={{ position: 'relative' }}>
-              <select
-                value={selectedSeason}
-                onChange={(e) => setSelectedSeason(Number(e.target.value))}
-                style={{
-                  backgroundColor: '#242424',
-                  color: '#fff',
-                  border: '1px solid rgba(255,255,255,0.2)',
-                  borderRadius: 'var(--radius-sm)',
-                  padding: '10px 40px 10px 16px',
-                  fontSize: '1rem',
-                  fontWeight: 700,
-                  appearance: 'none',
-                  cursor: 'pointer',
-                  outline: 'none',
-                }}
-              >
-                {seasonsList.map((s) => (
-                  <option key={s} value={s}>
-                    Season {s}
-                  </option>
-                ))}
-              </select>
-              <ChevronDown
-                size={18}
-                style={{
-                  position: 'absolute',
-                  right: 12,
-                  top: '50%',
-                  transform: 'translateY(-50%)',
-                  pointerEvents: 'none',
-                  color: '#fff',
-                }}
-              />
-            </div>
-          )}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+            {/* Episode Search — only useful once there's more than one episode to search through */}
+            {(details.episodes?.length || 0) > 1 && (
+              <div style={{ position: 'relative' }}>
+                <Search
+                  size={16}
+                  style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }}
+                />
+                <input
+                  type="text"
+                  value={episodeSearchQuery}
+                  onChange={(e) => setEpisodeSearchQuery(e.target.value)}
+                  placeholder="Search episodes..."
+                  style={{
+                    backgroundColor: '#242424',
+                    color: '#fff',
+                    border: '1px solid rgba(255,255,255,0.2)',
+                    borderRadius: 'var(--radius-sm)',
+                    padding: '10px 14px 10px 36px',
+                    fontSize: '0.95rem',
+                    width: '220px',
+                    outline: 'none',
+                  }}
+                />
+              </div>
+            )}
+
+            {/* Netflix Season Selector Dropdown */}
+            {seasonsList.length > 1 && (
+              <div style={{ position: 'relative' }}>
+                <select
+                  value={selectedSeason}
+                  onChange={(e) => setSelectedSeason(Number(e.target.value))}
+                  style={{
+                    backgroundColor: '#242424',
+                    color: '#fff',
+                    border: '1px solid rgba(255,255,255,0.2)',
+                    borderRadius: 'var(--radius-sm)',
+                    padding: '10px 40px 10px 16px',
+                    fontSize: '1rem',
+                    fontWeight: 700,
+                    appearance: 'none',
+                    cursor: 'pointer',
+                    outline: 'none',
+                  }}
+                >
+                  {seasonsList.map((s) => (
+                    <option key={s} value={s}>
+                      Season {s}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown
+                  size={18}
+                  style={{
+                    position: 'absolute',
+                    right: 12,
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    pointerEvents: 'none',
+                    color: '#fff',
+                  }}
+                />
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Episode Cards List */}
-        {filteredEpisodes.length > 0 ? (
+        {searchedEpisodes.length > 0 ? (
           <div style={{ display: 'flex', flexDirection: 'column' }}>
-            {filteredEpisodes.map((ep, i) => (
-              <EpisodeRow key={i} ep={ep} index={i} onPlay={handlePlayEpisode} />
+            {searchedEpisodes.map((ep, i) => (
+              <EpisodeRow
+                key={i}
+                ep={ep}
+                index={i}
+                onPlay={handlePlayEpisode}
+                progressPercent={getEpisodeProgress(history, provider, url, ep)}
+              />
             ))}
+          </div>
+        ) : filteredEpisodes.length > 0 ? (
+          <div style={{ padding: '36px', backgroundColor: '#181818', borderRadius: 'var(--radius-sm)', textAlign: 'center', border: '1px solid rgba(255,255,255,0.05)' }}>
+            <p style={{ color: 'var(--text-muted)', fontSize: '1rem' }}>
+              No episodes match "{episodeSearchQuery}".
+            </p>
           </div>
         ) : (
           <div style={{ padding: '36px', backgroundColor: '#181818', borderRadius: 'var(--radius-sm)', textAlign: 'center', border: '1px solid rgba(255,255,255,0.05)' }}>

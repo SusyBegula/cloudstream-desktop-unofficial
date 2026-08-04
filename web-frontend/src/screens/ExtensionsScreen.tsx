@@ -187,6 +187,65 @@ export const ExtensionsScreen: React.FC = () => {
         </div>
       )}
 
+      {/* Installed Plugins — shown regardless of repository/catalog state, since a plugin can be
+          installed (e.g. bundled .cs3 files) without its source repository being saved. */}
+      {installedPlugins.length > 0 && (
+        <div style={{ marginBottom: '36px' }}>
+          <h3 style={{ fontSize: '1.15rem', fontWeight: 800, marginBottom: '14px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <CheckCircle2 size={18} style={{ color: 'var(--netflix-green)' }} />
+            <span>Installed Plugins ({installedPlugins.length})</span>
+          </h3>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '22px' }}>
+            {installedPlugins.map((plugin, idx) => {
+              const isLoadingThis = actionLoading === plugin.internalName;
+              return (
+                <div
+                  key={idx}
+                  className="animate-fade-in"
+                  style={{
+                    padding: '24px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    justifyContent: 'space-between',
+                    backgroundColor: '#181818',
+                    borderRadius: 'var(--radius-sm)',
+                    border: '1px solid var(--netflix-red)',
+                  }}
+                >
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                      <h4 style={{ fontSize: '1.15rem', fontWeight: 800, color: '#fff' }}>{plugin.name}</h4>
+                    </div>
+                    <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '20px' }}>
+                      ID: {plugin.internalName}
+                    </p>
+                  </div>
+
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--netflix-green)', fontSize: '0.82rem', fontWeight: 800 }}>
+                      <CheckCircle2 size={16} /> Installed
+                    </div>
+                    <button
+                      className="btn btn-secondary"
+                      onClick={() => handleUninstallPlugin(plugin)}
+                      disabled={isLoadingThis}
+                      style={{ fontSize: '0.88rem', padding: '8px 16px' }}
+                    >
+                      {isLoadingThis ? (
+                        <div className="spinner" style={{ width: 16, height: 16 }} />
+                      ) : (
+                        <Trash2 size={16} style={{ color: 'var(--netflix-red)' }} />
+                      )}
+                      <span>Uninstall</span>
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* Repositories Tabs */}
       {repositories.length > 0 && (
         <div style={{ display: 'flex', gap: '10px', overflowX: 'auto', paddingBottom: '12px', marginBottom: '28px' }}>
@@ -212,22 +271,28 @@ export const ExtensionsScreen: React.FC = () => {
       )}
 
       {/* Plugin Cards Grid */}
+      {repositories.length > 0 && (
+        <h3 style={{ fontSize: '1.15rem', fontWeight: 800, marginBottom: '14px' }}>Browse Repository</h3>
+      )}
       {loading ? (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '20px' }}>
           {Array.from({ length: 4 }).map((_, i) => (
             <div key={i} className="skeleton" style={{ height: '140px' }} />
           ))}
         </div>
-      ) : catalogPlugins.length === 0 ? (
+      ) : catalogPlugins.length === 0 && repositories.length > 0 ? (
+        <div style={{ padding: '80px', textAlign: 'center', color: 'var(--text-muted)' }}>
+          <Package size={56} style={{ color: 'var(--text-subtle)', marginBottom: '16px' }} />
+          <p style={{ fontSize: '1.05rem', fontWeight: 600 }}>No plugins found in this repository.</p>
+        </div>
+      ) : catalogPlugins.length === 0 && repositories.length === 0 && installedPlugins.length === 0 ? (
         <div style={{ padding: '80px', textAlign: 'center', color: 'var(--text-muted)' }}>
           <Package size={56} style={{ color: 'var(--text-subtle)', marginBottom: '16px' }} />
           <p style={{ fontSize: '1.05rem', fontWeight: 600 }}>
-            {selectedRepoUrl
-              ? 'No plugins found in this repository.'
-              : 'No repositories added yet. Paste a CloudStream repo URL above to start.'}
+            No repositories added yet. Paste a CloudStream repo URL above to start.
           </p>
         </div>
-      ) : (
+      ) : catalogPlugins.length === 0 ? null : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '22px' }}>
           {catalogPlugins.map((plugin, idx) => {
             const isInstalled = installedPlugins.some((p) => p.internalName === plugin.internalName);

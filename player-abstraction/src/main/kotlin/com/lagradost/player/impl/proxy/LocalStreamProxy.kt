@@ -2,6 +2,7 @@ package com.lagradost.player.impl.proxy
 
 import com.lagradost.cloudstream3.app
 import com.lagradost.common.logging.AppLogger
+import com.lagradost.player.impl.transcode.TranscodeManager
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
@@ -115,6 +116,7 @@ object LocalStreamProxy {
                 get("/proxy/base/{sessionId}/{path...}") {
                     handleBaseRequest(call)
                 }
+                TranscodeManager.registerRoutes(this)
             }
         }.start(wait = false)
 

@@ -3,6 +3,8 @@ package com.lagradost.webclient.server.routes
 import com.lagradost.cloudstream3.utils.ExtractorLinkPlayList
 import com.lagradost.player.impl.PlayerLinkHandler
 import com.lagradost.player.impl.proxy.LocalStreamProxy
+import com.lagradost.player.impl.transcode.StreamProbe
+import com.lagradost.player.impl.transcode.TranscodeManager
 import com.lagradost.webclient.api.PlayableStreamDto
 import com.lagradost.webclient.api.ResolveRequest
 import io.ktor.http.HttpStatusCode
@@ -49,6 +51,37 @@ fun Route.resolveRoutes() {
             PlayerLinkHandler.StreamKind.HLS -> "application/vnd.apple.mpegurl"
             PlayerLinkHandler.StreamKind.DASH -> "application/dash+xml"
             PlayerLinkHandler.StreamKind.PROGRESSIVE -> "video/mp4"
+        }
+
+        // Browsers can only decode a fixed codec set (no HEVC, no AC3/DTS, etc — Chromium ships
+        // no HEVC decoder at all on Linux). Probe the already-proxied stream (so ffmpeg needs no
+        // auth headers of its own) and transparently transcode just the incompatible track(s).
+        val probeResult = StreamProbe.probe(validated.url)
+        val transcodePlan = probeResult?.let { StreamProbe.planTranscode(it) }
+
+        if (transcodePlan != null) {
+            val transcodedPlaylistUrl = TranscodeManager.startSession(
+                validated.url,
+                transcodePlan,
+                LocalStreamProxy.publicHost,
+                LocalStreamProxy.port,
+                startOffsetSeconds = request.startSeconds,
+            )
+
+            if (transcodedPlaylistUrl != null) {
+                call.respond(
+                    PlayableStreamDto(
+                        proxyUrl = transcodedPlaylistUrl,
+                        mimeType = "application/vnd.apple.mpegurl",
+                        kind = "HLS",
+                        audioTracks = validated.audioTracks.map { it.toDto() },
+                        // Lets the player show the real seek bar/duration immediately instead of
+                        // only the portion transcoded so far (the HLS event playlist grows over time).
+                        durationSeconds = probeResult.durationSeconds.takeIf { it > 0 },
+                    ),
+                )
+                return@post
+            }
         }
 
         call.respond(

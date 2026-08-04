@@ -40,6 +40,15 @@ data class WatchHistory(
     val updateTime: Long = System.currentTimeMillis(),
 )
 
+data class PreferredSource(
+    val provider: String,
+    // The show/movie's own page URL — same identity key used for watch history.
+    val showUrl: String,
+    // Matched against ExtractorLink.source when picking the initial link for an episode.
+    val sourceName: String,
+    val updatedAt: Long = System.currentTimeMillis(),
+)
+
 data class PluginUpdateRecord(
     val pluginName: String,
     val version: Int,
@@ -239,6 +248,43 @@ object DesktopDataStore {
         episodeId: String?,
     ): WatchHistory? {
         return getAllWatchHistory().find { it.parentId == parentId && it.episodeId == episodeId }
+    }
+
+
+
+    private const val PREFERRED_SOURCES_KEY = "user_preferred_sources"
+
+    fun getAllPreferredSources(): List<PreferredSource> {
+        val json = cache[PREFERRED_SOURCES_KEY] ?: return emptyList()
+        return try {
+            mapper.readValue(json, object : TypeReference<List<PreferredSource>>() {})
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
+    fun getPreferredSource(
+        provider: String,
+        showUrl: String,
+    ): PreferredSource? {
+        return getAllPreferredSources().find { it.provider == provider && it.showUrl == showUrl }
+    }
+
+    fun setPreferredSource(pref: PreferredSource) {
+        val current = getAllPreferredSources().toMutableList()
+        current.removeAll { it.provider == pref.provider && it.showUrl == pref.showUrl }
+        current.add(pref.copy(updatedAt = System.currentTimeMillis()))
+        setKey(PREFERRED_SOURCES_KEY, current)
+    }
+
+    fun removePreferredSource(
+        provider: String,
+        showUrl: String,
+    ) {
+        val current = getAllPreferredSources().toMutableList()
+        if (current.removeAll { it.provider == provider && it.showUrl == showUrl }) {
+            setKey(PREFERRED_SOURCES_KEY, current)
+        }
     }
 
 

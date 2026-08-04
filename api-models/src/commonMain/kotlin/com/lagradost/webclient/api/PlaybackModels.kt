@@ -56,6 +56,9 @@ data class LinkEventDto(
 @Serializable
 data class ResolveRequest(
     val link: ExtractorLinkDto,
+    /** Restarts a transcode from this offset instead of the beginning — used when the player
+     * seeks past what's been transcoded so far (see [PlayableStreamDto.durationSeconds]). */
+    val startSeconds: Double = 0.0,
 )
 
 /** Playback kind is always resolved server-side to something a browser can consume directly. */
@@ -66,4 +69,8 @@ data class PlayableStreamDto(
     val kind: String,
     val subtitles: List<SubtitleFileDto> = emptyList(),
     val audioTracks: List<AudioFileDto> = emptyList(),
+    /** Set only for transcoded streams, whose HLS playlist grows over time and so can't report
+     * its own total length yet — lets the player show the real seek bar/duration immediately,
+     * like a normal VOD, instead of only the portion transcoded so far. */
+    val durationSeconds: Double? = null,
 )

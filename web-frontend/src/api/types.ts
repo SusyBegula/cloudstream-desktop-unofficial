@@ -124,6 +124,9 @@ export interface PlayableStreamDto {
   kind: string;
   subtitles?: SubtitleFileDto[];
   audioTracks?: AudioFileDto[];
+  /** Set only for transcoded streams (growing HLS playlist) — the real total duration, so the
+   * player can show a full seek bar immediately instead of just the portion transcoded so far. */
+  durationSeconds?: number;
 }
 
 export interface WatchHistoryEntryDto {
@@ -141,6 +144,15 @@ export interface WatchHistoryEntryDto {
 
 export interface WatchHistoryResponse {
   entries: WatchHistoryEntryDto[];
+}
+
+/** Remembers which stream source (ExtractorLinkDto.source) to prefer for a show, so the player
+ * doesn't default back to the first link on every new episode. Falls back automatically when
+ * that source isn't present for a given episode (e.g. picked up by client-side matching logic). */
+export interface PreferredSourceDto {
+  provider: string;
+  seriesUrl: string;
+  sourceName: string;
 }
 
 export interface BookmarkDto {

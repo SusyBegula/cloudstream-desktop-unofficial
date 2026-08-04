@@ -222,8 +222,13 @@ object ServerPluginManager {
 
     fun uninstall(internalName: String): Result<Unit> {
         return try {
-            val extensionsDir = PlatformPaths.extensionsDir
-            val file = extensionsDir.walkTopDown().firstOrNull { it.nameWithoutExtension == internalName && (it.extension == "cs3" || it.extension == "jar") }
+            // Installed filenames rarely match the provider's internalName (e.g. "MovieBoxProvider.jar"
+            // vs internalName "MovieBox"), so look up the exact file via the provider's sourcePlugin,
+            // which ExtensionLoader sets to the jar's absolute path at load time and keys unloadPlugin by.
+            val sourcePath = synchronized(APIHolder.allProviders) {
+                APIHolder.allProviders.firstOrNull { it.name == internalName }?.sourcePlugin
+            }
+            val file = sourcePath?.let { File(it) }?.takeIf { it.exists() }
             if (file != null) {
                 ExtensionLoader.unloadPlugin(file.absolutePath)
                 file.delete()

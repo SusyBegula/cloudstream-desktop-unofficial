@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Search, X, Play, ChevronDown } from 'lucide-react';
-import type { ExtractorLinkDto, SearchResultDto, SubtitleFileDto, ProviderDto } from './api/types';
+import type { SearchResultDto, ProviderDto } from './api/types';
 import api from './api/client';
 import HomeScreen from './screens/HomeScreen';
-import DetailsScreen from './screens/DetailsScreen';
+import DetailsScreen, { type StartPlaybackParams } from './screens/DetailsScreen';
 import PlayerScreen from './screens/PlayerScreen';
 import LibraryScreen from './screens/LibraryScreen';
 import ExtensionsScreen from './screens/ExtensionsScreen';
@@ -11,15 +11,7 @@ import ExtensionsScreen from './screens/ExtensionsScreen';
 type Screen =
   | { type: 'home' }
   | { type: 'details'; provider: string; url: string }
-  | {
-      type: 'player';
-      title: string;
-      subtitleText?: string;
-      availableLinks: ExtractorLinkDto[];
-      subtitles: SubtitleFileDto[];
-      provider: string;
-      episodeDataUrl: string;
-    }
+  | ({ type: 'player' } & StartPlaybackParams)
   | { type: 'library' }
   | { type: 'extensions' };
 
@@ -75,6 +67,10 @@ function urlToScreen(): Screen {
         subtitles: [],
         provider,
         episodeDataUrl: url,
+        // A direct URL load (refresh/deep link) never had the show's own page URL to begin
+        // with, so watch history for this session can't be matched back to the show — falls
+        // back to the episode URL, same degraded behavior as before this feature existed.
+        seriesUrl: url,
       };
     }
   }
@@ -339,17 +335,7 @@ export const App: React.FC = () => {
             provider={currentScreen.provider}
             url={currentScreen.url}
             onBack={() => navigateTo({ type: 'home' })}
-            onStartPlayback={(title, subtitleText, availableLinks, subtitles, provider, episodeDataUrl) =>
-              navigateTo({
-                type: 'player',
-                title,
-                subtitleText,
-                availableLinks,
-                subtitles,
-                provider,
-                episodeDataUrl,
-              })
-            }
+            onStartPlayback={(params) => navigateTo({ type: 'player', ...params })}
           />
         )}
 
@@ -361,6 +347,11 @@ export const App: React.FC = () => {
             subtitles={currentScreen.subtitles}
             provider={currentScreen.provider}
             episodeDataUrl={currentScreen.episodeDataUrl}
+            seriesUrl={currentScreen.seriesUrl}
+            posterUrl={currentScreen.posterUrl}
+            season={currentScreen.season}
+            episode={currentScreen.episode}
+            startPositionMs={currentScreen.startPositionMs}
             onBack={() => navigateTo({ type: 'home' })}
           />
         )}

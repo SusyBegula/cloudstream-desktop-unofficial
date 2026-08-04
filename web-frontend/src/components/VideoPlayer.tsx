@@ -13,9 +13,14 @@ import {
   SkipForward,
   SkipBack,
   ArrowLeft,
+  Star,
 } from 'lucide-react';
 import type { ExtractorLinkDto, PlayableStreamDto, SubtitleFileDto } from '../api/types';
 
+// How long to wait after the user stops dragging the seek bar before restarting the transcode
+// at the new position — otherwise every tick of a drag across untranscoded territory would fire
+// its own resolve + ffmpeg restart.
+const SEEK_DEBOUNCE_MS = 400;
 
 interface VideoPlayerProps {
   streamInfo: PlayableStreamDto | null;
@@ -30,6 +35,14 @@ interface VideoPlayerProps {
   onNextEpisode?: () => void;
   onPrevEpisode?: () => void;
   onProgressUpdate?: (positionMs: number, durationMs: number) => void;
+  /** Re-resolves the current link starting at [startSeconds] — used when seeking past what a
+   * transcoded stream (see PlayableStreamDto.durationSeconds) has produced so far. */
+  onResolveAt?: (startSeconds: number) => Promise<PlayableStreamDto>;
+  /** The source name (ExtractorLinkDto.source) remembered for this show, if any — drives the
+   * "Remember choice" control's filled/outline star state. */
+  preferredSourceName?: string | null;
+  onSetPreferredSource?: (sourceName: string) => void;
+  onClearPreferredSource?: () => void;
 }
 
 export const VideoPlayer: React.FC<VideoPlayerProps> = ({
@@ -45,6 +58,10 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
   onNextEpisode,
   onPrevEpisode,
   onProgressUpdate,
+  onResolveAt,
+  preferredSourceName,
+  onSetPreferredSource,
+  onClearPreferredSource,
 }) => {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const hlsRef = useRef<Hls | null>(null);
@@ -62,7 +79,32 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
   const [showSubtitleMenu, setShowSubtitleMenu] = useState<boolean>(false);
   const [selectedSubtitle, setSelectedSubtitle] = useState<SubtitleFileDto | null>(null);
 
+  // Virtual timeline for transcoded streams: the growing HLS playlist only knows about the
+  // portion transcoded so far, so we track the *real* total duration and the offset the
+  // currently-loaded stream's local time 0 represents, letting the seek bar show/seek across
+  // the whole runtime immediately (like a normal VOD) instead of just what's been produced.
+  const [internalStream, setInternalStream] = useState<PlayableStreamDto | null>(streamInfo);
+  const [sessionStartOffsetSec, setSessionStartOffsetSec] = useState<number>(startPositionMs / 1000);
+  const [knownDurationSec, setKnownDurationSec] = useState<number | null>(streamInfo?.durationSeconds ?? null);
+  const [isSeekPending, setIsSeekPending] = useState<boolean>(false);
+  const isInitialLoadRef = useRef<boolean>(true);
+
   const controlsTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const seekDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // A fresh link selection from the parent replaces the whole session (offset back to the
+  // resume position, duration back to whatever the new stream reports).
+  useEffect(() => {
+    isInitialLoadRef.current = true;
+    setInternalStream(streamInfo);
+    setSessionStartOffsetSec(startPositionMs / 1000);
+    setKnownDurationSec(streamInfo?.durationSeconds ?? null);
+  }, [streamInfo]);
+
+  // Show the full known duration immediately, rather than waiting for the first timeupdate tick.
+  useEffect(() => {
+    if (knownDurationSec != null) setDuration(knownDurationSec);
+  }, [knownDurationSec]);
 
 
   // Auto-hide controls timer
@@ -74,10 +116,12 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
     }, 3500);
   };
 
-  // Initialize Video & HLS
+  // Initialize Video & HLS/DASH — keyed on internalStream (not the streamInfo prop directly) so
+  // a reseek-triggered re-resolve (new proxyUrl, same "session") reloads exactly like a fresh
+  // link selection does, just without re-applying the original resume position.
   useEffect(() => {
     const video = videoRef.current;
-    if (!video || !streamInfo) return;
+    if (!video || !internalStream) return;
 
     if (hlsRef.current) {
       hlsRef.current.destroy();
@@ -89,28 +133,41 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
     }
 
     const isHls =
-      streamInfo.kind === 'HLS' ||
-      streamInfo.mimeType.includes('mpegurl') ||
-      streamInfo.proxyUrl.includes('.m3u8');
+      internalStream.kind === 'HLS' ||
+      internalStream.mimeType.includes('mpegurl') ||
+      internalStream.proxyUrl.includes('.m3u8');
 
     const isDash =
-      streamInfo.kind === 'DASH' ||
-      streamInfo.mimeType.includes('dash+xml') ||
-      streamInfo.proxyUrl.includes('.mpd');
+      internalStream.kind === 'DASH' ||
+      internalStream.mimeType.includes('dash+xml') ||
+      internalStream.proxyUrl.includes('.mpd');
+
+    const applyResumePosition = () => {
+      if (isInitialLoadRef.current && startPositionMs > 0) {
+        video.currentTime = startPositionMs / 1000;
+      }
+      isInitialLoadRef.current = false;
+    };
+
+    // Only our own transcoder produces a growing "event" playlist — every other HLS source
+    // (untouched, browser-compatible streams) is a normal VOD playlist and should behave exactly
+    // as before.
+    const isTranscodedGrowingPlaylist = internalStream.durationSeconds != null;
 
     if (isHls && Hls.isSupported()) {
       const hls = new Hls({
         enableWorker: true,
-        lowLatencyMode: true,
+        // Growing "event" playlists (our transcoder) aren't a real live edge — low-latency mode
+        // fights the buffer instead of just letting it build up, which caused extra stalling.
+        // Normal HLS sources keep the original low-latency behavior.
+        lowLatencyMode: !isTranscodedGrowingPlaylist,
       });
       hlsRef.current = hls;
-      hls.loadSource(streamInfo.proxyUrl);
+      hls.loadSource(internalStream.proxyUrl);
       hls.attachMedia(video);
 
       hls.on(Hls.Events.MANIFEST_PARSED, () => {
-        if (startPositionMs > 0) {
-          video.currentTime = startPositionMs / 1000;
-        }
+        applyResumePosition();
         video.play().catch(() => setIsPlaying(false));
       });
 
@@ -122,12 +179,10 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
     } else if (isDash) {
       const dash = dashjs.MediaPlayer().create();
       dashRef.current = dash;
-      dash.initialize(video, streamInfo.proxyUrl, false);
+      dash.initialize(video, internalStream.proxyUrl, false);
 
       dash.on(dashjs.MediaPlayer.events.CAN_PLAY, () => {
-        if (startPositionMs > 0) {
-          video.currentTime = startPositionMs / 1000;
-        }
+        applyResumePosition();
         video.play().catch(() => setIsPlaying(false));
       });
 
@@ -135,11 +190,9 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
         console.error('Fatal DASH error:', data);
       });
     } else {
-      video.src = streamInfo.proxyUrl;
+      video.src = internalStream.proxyUrl;
       video.onloadedmetadata = () => {
-        if (startPositionMs > 0) {
-          video.currentTime = startPositionMs / 1000;
-        }
+        applyResumePosition();
         video.play().catch(() => setIsPlaying(false));
       };
     }
@@ -154,18 +207,25 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
         dashRef.current = null;
       }
     };
-  }, [streamInfo]);
+  }, [internalStream]);
 
-  // Video event handlers & position progress reporting
+  // Video event handlers & position progress reporting. For transcoded streams (knownDurationSec
+  // set), currentTime/duration are reported in *global* timeline seconds (sessionStartOffsetSec +
+  // the active stream's local time) so the seek bar/progress-save code never needs to know a
+  // reseek happened underneath it. For every other (already browser-compatible) stream,
+  // video.currentTime is already the real absolute position — reported as-is, unchanged from
+  // before this feature existed.
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
 
     const onTimeUpdate = () => {
-      setCurrentTime(video.currentTime);
-      setDuration(video.duration || 0);
-      if (onProgressUpdate && video.duration > 0) {
-        onProgressUpdate(video.currentTime * 1000, video.duration * 1000);
+      const globalTime = knownDurationSec != null ? sessionStartOffsetSec + video.currentTime : video.currentTime;
+      const totalDuration = knownDurationSec ?? video.duration;
+      setCurrentTime(globalTime);
+      setDuration(totalDuration || 0);
+      if (onProgressUpdate && totalDuration > 0) {
+        onProgressUpdate(globalTime * 1000, totalDuration * 1000);
       }
     };
 
@@ -181,7 +241,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
       video.removeEventListener('play', onPlay);
       video.removeEventListener('pause', onPause);
     };
-  }, [onProgressUpdate]);
+  }, [onProgressUpdate, sessionStartOffsetSec, knownDurationSec]);
 
   const togglePlay = () => {
     const video = videoRef.current;
@@ -193,13 +253,68 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
     }
   };
 
+  const performOutOfBufferSeek = async (targetGlobal: number) => {
+    if (!onResolveAt) return;
+    setIsSeekPending(true);
+    try {
+      const newStream = await onResolveAt(targetGlobal);
+      isInitialLoadRef.current = false; // this is a reseek, not the original resume position
+      setSessionStartOffsetSec(targetGlobal);
+      setInternalStream(newStream);
+    } catch (err) {
+      console.error('Failed to seek to a not-yet-transcoded position:', err);
+    } finally {
+      setIsSeekPending(false);
+    }
+  };
+
   const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
     const video = videoRef.current;
     if (!video) return;
-    const seekTime = parseFloat(e.target.value);
-    video.currentTime = seekTime;
-    setCurrentTime(seekTime);
+    const targetGlobal = parseFloat(e.target.value);
+
+    // Any drag tick supersedes a previously scheduled restart — only the position the user
+    // settles on should actually trigger one.
+    if (seekDebounceRef.current) {
+      clearTimeout(seekDebounceRef.current);
+      seekDebounceRef.current = null;
+    }
+
+    // Not a transcoded/growing stream — no virtual timeline involved, seek exactly as before.
+    if (knownDurationSec == null) {
+      video.currentTime = targetGlobal;
+      setCurrentTime(targetGlobal);
+      return;
+    }
+
+    const localTarget = targetGlobal - sessionStartOffsetSec;
+    const seekable = video.seekable;
+    const withinBuffered =
+      seekable.length > 0 && localTarget >= seekable.start(0) && localTarget <= seekable.end(seekable.length - 1);
+
+    setCurrentTime(targetGlobal); // reflect the drag immediately either way
+
+    if (withinBuffered) {
+      // Already transcoded — instant seek, no restart needed.
+      video.currentTime = localTarget;
+      return;
+    }
+
+    // Past what's been transcoded so far (or before the current session's start). Debounce
+    // restarting the transcode until the drag settles, rather than firing a resolve + ffmpeg
+    // restart on every tick while scrubbing across untranscoded territory.
+    seekDebounceRef.current = setTimeout(() => {
+      seekDebounceRef.current = null;
+      performOutOfBufferSeek(targetGlobal);
+    }, SEEK_DEBOUNCE_MS);
   };
+
+  // Don't let a pending debounced seek fire (and setState) after the component's gone.
+  useEffect(() => {
+    return () => {
+      if (seekDebounceRef.current) clearTimeout(seekDebounceRef.current);
+    };
+  }, []);
 
   const handleVolumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const video = videoRef.current;
@@ -271,6 +386,26 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
           />
         )}
       </video>
+
+      {/* Seek-beyond-buffer overlay: shown while the backend restarts the transcode from the new position */}
+      {isSeekPending && (
+        <div
+          style={{
+            position: 'absolute',
+            inset: 0,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '16px',
+            backgroundColor: 'rgba(0,0,0,0.55)',
+            pointerEvents: 'none',
+          }}
+        >
+          <div className="spinner" />
+          <p style={{ color: '#fff', fontSize: '0.9rem' }}>Seeking...</p>
+        </div>
+      )}
 
       {/* Top Overlay Bar */}
       <div
@@ -356,11 +491,12 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
             max={duration || 100}
             value={currentTime}
             onChange={handleSeek}
+            disabled={isSeekPending}
             style={{
               width: '100%',
               height: '6px',
               accentColor: 'var(--accent-primary)',
-              cursor: 'pointer',
+              cursor: isSeekPending ? 'default' : 'pointer',
             }}
           />
         </div>
@@ -509,6 +645,34 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                         </div>
                       </button>
                     ))}
+
+                    {selectedLink && (onSetPreferredSource || onClearPreferredSource) && (
+                      <>
+                        <div style={{ height: 1, background: 'rgba(255,255,255,0.1)', margin: '4px 0' }} />
+                        <button
+                          className="btn btn-secondary"
+                          style={{
+                            justifyContent: 'flex-start',
+                            padding: '6px 12px',
+                            fontSize: '0.85rem',
+                            color: preferredSourceName === selectedLink.source ? 'var(--accent-cyan)' : 'inherit',
+                          }}
+                          onClick={() => {
+                            if (preferredSourceName === selectedLink.source) {
+                              onClearPreferredSource?.();
+                            } else {
+                              onSetPreferredSource?.(selectedLink.source);
+                            }
+                          }}
+                          title="Remember this source so future episodes of this title default to it"
+                        >
+                          <Star size={14} fill={preferredSourceName === selectedLink.source ? 'currentColor' : 'none'} />
+                          <span>
+                            {preferredSourceName === selectedLink.source ? 'Remembered for this title' : 'Remember this choice'}
+                          </span>
+                        </button>
+                      </>
+                    )}
                   </div>
                 )}
               </div>

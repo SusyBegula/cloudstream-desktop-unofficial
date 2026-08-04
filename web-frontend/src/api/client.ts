@@ -11,6 +11,7 @@ import type {
   MainPageCategoriesResponse,
   PlayableStreamDto,
   PluginCatalogResponse,
+  PreferredSourceDto,
   ProviderListResponse,
   RepositoryDto,
   WatchHistoryEntryDto,
@@ -76,11 +77,12 @@ class ApiClient {
     });
   }
 
-  async resolve(link: ExtractorLinkDto): Promise<PlayableStreamDto> {
+  /** [startSeconds] restarts a transcode from that offset — used when the player seeks past what's been transcoded so far. */
+  async resolve(link: ExtractorLinkDto, startSeconds?: number): Promise<PlayableStreamDto> {
     return this.fetchJson<PlayableStreamDto>(`${this.baseUrl}/api/resolve`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ link }),
+      body: JSON.stringify(startSeconds ? { link, startSeconds } : { link }),
     });
   }
 
@@ -108,6 +110,28 @@ class ApiClient {
     await this.fetchJson<void>(`${this.baseUrl}/api/history/item?${params.toString()}`, {
       method: 'DELETE',
     });
+  }
+
+  /** Null means no preference has been remembered for this show yet — not an error. */
+  async getPreferredSource(provider: string, seriesUrl: string): Promise<PreferredSourceDto | null> {
+    const params = new URLSearchParams({ provider, seriesUrl });
+    const res = await fetch(`${this.baseUrl}/api/preferred-source?${params.toString()}`);
+    if (res.status === 404) return null;
+    if (!res.ok) throw new Error(`API Request failed (${res.status}) on GET preferred-source`);
+    return res.json();
+  }
+
+  async setPreferredSource(dto: PreferredSourceDto): Promise<void> {
+    await this.fetchJson<void>(`${this.baseUrl}/api/preferred-source`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(dto),
+    });
+  }
+
+  async clearPreferredSource(provider: string, seriesUrl: string): Promise<void> {
+    const params = new URLSearchParams({ provider, seriesUrl });
+    await this.fetchJson<void>(`${this.baseUrl}/api/preferred-source?${params.toString()}`, { method: 'DELETE' });
   }
 
   async clearHistory(): Promise<void> {
