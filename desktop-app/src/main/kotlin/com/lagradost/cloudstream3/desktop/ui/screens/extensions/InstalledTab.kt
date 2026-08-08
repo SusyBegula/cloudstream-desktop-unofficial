@@ -158,7 +158,7 @@ fun InstalledTab(viewModel: ExtensionsViewModel, syncGeneration: Int) {
                         } else {
                             showUnsupportedWarning = true
                         }
-                    }
+                    },
                 )
 
                 if (showDynamicSettings) {

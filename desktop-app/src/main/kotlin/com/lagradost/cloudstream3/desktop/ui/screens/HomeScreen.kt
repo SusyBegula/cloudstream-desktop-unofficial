@@ -36,7 +36,7 @@ fun ComposeHomeScreen(
     val hasUnreadUpdates by DesktopDataStore.pluginUpdatesFlow
         .map { DesktopDataStore.hasUnreadUpdates() }
         .collectAsState(initial = DesktopDataStore.hasUnreadUpdates())
-    
+
     val updatesHistory by DesktopDataStore.pluginUpdatesFlow
         .map { DesktopDataStore.getUpdatesHistory() }
         .collectAsState(initial = DesktopDataStore.getUpdatesHistory())
@@ -181,6 +181,6 @@ fun ComposeHomeScreen(
         mergedPluginIcons = mergedPluginIcons,
         hasUnreadUpdates = hasUnreadUpdates,
         updatesHistory = updatesHistory,
-        onMarkUpdatesRead = { DesktopDataStore.setUnreadUpdates(false) }
+        onMarkUpdatesRead = { DesktopDataStore.setUnreadUpdates(false) },
     )
 }

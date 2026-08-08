@@ -48,7 +48,7 @@ fun main() {
             coil3.ImageLoader.Builder(context)
                 .memoryCache {
                     coil3.memory.MemoryCache.Builder()
-                        .maxSizePercent(context, 0.25)
+                        .maxSizePercent(context, 0.1)
                         .build()
                 }
                 .diskCache {
@@ -62,8 +62,8 @@ fun main() {
                         coil3.network.okhttp.OkHttpNetworkFetcherFactory(
                             callFactory = { request ->
                                 com.lagradost.cloudstream3.app.baseClient.newCall(request)
-                            }
-                        )
+                            },
+                        ),
                     )
                 }
                 .crossfade(true)

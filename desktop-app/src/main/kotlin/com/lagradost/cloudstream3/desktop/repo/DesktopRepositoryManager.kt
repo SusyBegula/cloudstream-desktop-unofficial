@@ -162,7 +162,7 @@ object DesktopRepositoryManager {
             try {
                 val nodes = mapper.readTree(body!!)
                 val urls = nodes.mapNotNull { it.get("url")?.asText() }
-                
+
                 val addedRepos = mutableListOf<Repository>()
                 for (url in urls) {
                     val repo = addSingleRepository(url)
@@ -292,7 +292,6 @@ object DesktopRepositoryManager {
             emptyList()
         }
     }
-
 
     fun getExtensionsDir(): File = PlatformPaths.extensionsDir
 
@@ -492,14 +491,14 @@ object DesktopRepositoryManager {
 
                         if (remotePlugin.version > localVersion) {
                             AppLogger.i("Auto-Updater: Updating ${remotePlugin.name} from v$localVersion to v${remotePlugin.version}")
-                            
+
                             val iconUrl = remotePlugin.iconUrl ?: remotePluginIcons.value[remotePlugin.internalName] ?: saved.iconUrl
                             updatedList.add(
                                 com.lagradost.common.storage.PluginUpdateRecord(
                                     pluginName = remotePlugin.name,
                                     version = remotePlugin.version,
-                                    iconUrl = iconUrl
-                                )
+                                    iconUrl = iconUrl,
+                                ),
                             )
 
                             com.lagradost.runtime.loader.ExtensionLoader.unloadPlugin(localJar.absolutePath)

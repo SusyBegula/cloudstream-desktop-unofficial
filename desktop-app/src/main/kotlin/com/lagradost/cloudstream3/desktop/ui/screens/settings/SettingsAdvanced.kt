@@ -1,8 +1,13 @@
 package com.lagradost.cloudstream3.desktop.ui.screens.settings
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -10,13 +15,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Delete
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.background
 import com.lagradost.cloudstream3.desktop.utils.PlaywrightManager
 import kotlinx.coroutines.launch
 
@@ -44,10 +44,10 @@ fun SettingsAdvanced() {
                     var isGlobalSearch by remember { mutableStateOf(com.lagradost.common.storage.DesktopDataStore.getKey<Boolean>("global_search_enabled") ?: false) }
                     Switch(
                         checked = isGlobalSearch,
-                        onCheckedChange = { 
+                        onCheckedChange = {
                             isGlobalSearch = it
                             com.lagradost.common.storage.DesktopDataStore.setKey("global_search_enabled", it)
-                        }
+                        },
                     )
                 }
             }
@@ -92,10 +92,10 @@ fun SettingsAdvanced() {
             Column(modifier = Modifier.padding(16.dp)) {
                 Text("Data Management", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.SemiBold)
                 Spacer(modifier = Modifier.height(8.dp))
-                
+
                 var imageCacheSize by remember { mutableStateOf("Calculating...") }
                 val imageCacheDir = java.io.File(com.lagradost.common.platform.PlatformPaths.appDataDir, "image_cache")
-                
+
                 LaunchedEffect(Unit) {
                     kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
                         val size = if (imageCacheDir.exists()) imageCacheDir.walkTopDown().filter { it.isFile }.map { it.length() }.sum() / (1024 * 1024) else 0
@@ -123,7 +123,7 @@ fun SettingsAdvanced() {
             }
         }
         var showAddCloneDialog by remember { mutableStateOf(false) }
-        var clonedSites by remember { 
+        var clonedSites by remember {
             mutableStateOf(
                 try {
                     val json = com.lagradost.common.storage.DesktopDataStore.getKey<String>("USER_PROVIDER_API")
@@ -131,12 +131,14 @@ fun SettingsAdvanced() {
                         val mapper = com.fasterxml.jackson.module.kotlin.jacksonObjectMapper()
                         mapper.readValue<List<com.lagradost.cloudstream3.desktop.models.CustomSite>>(
                             json,
-                            object : com.fasterxml.jackson.core.type.TypeReference<List<com.lagradost.cloudstream3.desktop.models.CustomSite>>() {}
+                            object : com.fasterxml.jackson.core.type.TypeReference<List<com.lagradost.cloudstream3.desktop.models.CustomSite>>() {},
                         )
-                    } else emptyList()
+                    } else {
+                        emptyList()
+                    }
                 } catch (e: Exception) {
                     emptyList()
-                }
+                },
             )
         }
 
@@ -146,7 +148,7 @@ fun SettingsAdvanced() {
             var urlInput by remember { mutableStateOf("") }
             var langInput by remember { mutableStateOf("") }
             var expanded by remember { mutableStateOf(false) }
-            
+
             val availableProviders = remember {
                 com.lagradost.cloudstream3.APIHolder.allProviders.distinctBy { it::class.java.simpleName }.sortedBy { it.name }
             }
@@ -155,31 +157,31 @@ fun SettingsAdvanced() {
                 Surface(
                     modifier = Modifier.fillMaxWidth(0.8f).fillMaxHeight(0.8f),
                     shape = MaterialTheme.shapes.large,
-                    color = MaterialTheme.colorScheme.surface
+                    color = MaterialTheme.colorScheme.surface,
                 ) {
                     Row(modifier = Modifier.fillMaxSize()) {
                         // Left Pane: Provider Selection
                         Column(modifier = Modifier.weight(1f).fillMaxHeight().background(MaterialTheme.colorScheme.surfaceVariant).padding(16.dp)) {
                             Text("Select Base Provider", style = MaterialTheme.typography.titleLarge)
                             Spacer(Modifier.height(16.dp))
-                            
+
                             var searchQuery by remember { mutableStateOf("") }
                             OutlinedTextField(
                                 value = searchQuery,
                                 onValueChange = { searchQuery = it },
                                 modifier = Modifier.fillMaxWidth(),
                                 placeholder = { Text("Search providers...") },
-                                singleLine = true
+                                singleLine = true,
                             )
                             Spacer(Modifier.height(8.dp))
-                            
+
                             val filtered = availableProviders.filter { it.name.contains(searchQuery, true) }
-                            
+
                             LazyColumn(modifier = Modifier.fillMaxSize()) {
                                 items(filtered) { provider ->
                                     val isSelected = selectedProvider == provider
                                     val clonesCount = clonedSites.count { it.parentJavaClass == provider.javaClass.simpleName }
-                                    
+
                                     Surface(
                                         onClick = {
                                             selectedProvider = provider
@@ -189,14 +191,14 @@ fun SettingsAdvanced() {
                                         },
                                         modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
                                         color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
-                                        shape = MaterialTheme.shapes.medium
+                                        shape = MaterialTheme.shapes.medium,
                                     ) {
                                         Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
                                             Text(provider.name, modifier = Modifier.weight(1f), fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal)
                                             if (clonesCount > 0) {
                                                 Surface(
                                                     color = MaterialTheme.colorScheme.secondary,
-                                                    shape = MaterialTheme.shapes.small
+                                                    shape = MaterialTheme.shapes.small,
                                                 ) {
                                                     Text("$clonesCount", modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp), color = MaterialTheme.colorScheme.onSecondary, style = MaterialTheme.typography.labelSmall)
                                                 }
@@ -206,12 +208,12 @@ fun SettingsAdvanced() {
                                 }
                             }
                         }
-                        
+
                         // Right Pane: Configuration
                         Column(modifier = Modifier.weight(1.5f).fillMaxHeight().padding(24.dp)) {
                             Text("Configure Clone", style = MaterialTheme.typography.headlineSmall)
                             Spacer(Modifier.height(24.dp))
-                            
+
                             if (selectedProvider == null) {
                                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                                     Text("Select a provider from the left to configure it.", color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -221,23 +223,23 @@ fun SettingsAdvanced() {
                                     value = nameInput,
                                     onValueChange = { nameInput = it },
                                     label = { Text("Display Name") },
-                                    modifier = Modifier.fillMaxWidth()
+                                    modifier = Modifier.fillMaxWidth(),
                                 )
                                 Spacer(Modifier.height(16.dp))
                                 OutlinedTextField(
                                     value = urlInput,
                                     onValueChange = { urlInput = it },
                                     label = { Text("Override URL") },
-                                    modifier = Modifier.fillMaxWidth()
+                                    modifier = Modifier.fillMaxWidth(),
                                 )
                                 Spacer(Modifier.height(16.dp))
                                 OutlinedTextField(
                                     value = langInput,
                                     onValueChange = { langInput = it },
                                     label = { Text("Language Code (e.g. en)") },
-                                    modifier = Modifier.fillMaxWidth()
+                                    modifier = Modifier.fillMaxWidth(),
                                 )
-                                
+
                                 Spacer(Modifier.weight(1f))
                                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                                     TextButton(onClick = { showAddCloneDialog = false }) {
@@ -251,14 +253,14 @@ fun SettingsAdvanced() {
                                                 parentJavaClass = provider.javaClass.simpleName,
                                                 name = nameInput,
                                                 url = urlInput,
-                                                lang = langInput.ifBlank { provider.lang }
+                                                lang = langInput.ifBlank { provider.lang },
                                             )
                                             val newList = clonedSites + newSite
                                             clonedSites = newList
-                                            
+
                                             val mapper = com.fasterxml.jackson.module.kotlin.jacksonObjectMapper()
                                             com.lagradost.common.storage.DesktopDataStore.setKey("USER_PROVIDER_API", mapper.writeValueAsString(newList))
-                                            
+
                                             try {
                                                 val clone = provider.javaClass.getDeclaredConstructor().newInstance()
                                                 clone.name = newSite.name
@@ -270,7 +272,7 @@ fun SettingsAdvanced() {
                                             } catch (e: Exception) {
                                                 com.lagradost.common.logging.AppLogger.e("Failed to clone provider", e)
                                             }
-                                            
+
                                             showAddCloneDialog = false
                                         }
                                     }) {
@@ -322,7 +324,7 @@ fun SettingsAdvanced() {
                 }
             }
         }
-        
+
         Card(
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
             modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
@@ -378,4 +380,3 @@ fun SettingsAdvanced() {
         }
     }
 }
-

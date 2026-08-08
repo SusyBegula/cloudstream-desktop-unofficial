@@ -19,24 +19,16 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.lagradost.cloudstream3.desktop.repo.DesktopRepositoryManager
 import com.lagradost.cloudstream3.desktop.ui.components.LocalDesktopTheme
-import com.lagradost.cloudstream3.desktop.ui.components.darkDesktopColors
-import com.lagradost.cloudstream3.desktop.ui.components.lightDesktopColors
-import com.lagradost.cloudstream3.desktop.ui.theme.AppearanceConfig
 import com.lagradost.cloudstream3.desktop.ui.navigation.NavController
 import com.lagradost.cloudstream3.desktop.ui.navigation.Screen
 import com.lagradost.cloudstream3.desktop.utils.PlaywrightManager
 import com.lagradost.common.storage.DesktopDataStore
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.map
-import java.text.SimpleDateFormat
-import java.util.Date
-import coil3.compose.AsyncImage
+import kotlinx.coroutines.launch
 
 @Composable
 fun DesktopAppShell(
@@ -55,11 +47,10 @@ fun DesktopAppShell(
     val showBrowserPrompt by PlaywrightManager.showPrompt.collectAsState()
     val isBrowserDownloading by PlaywrightManager.isDownloading.collectAsState()
 
-
     val hasUnreadUpdates by DesktopDataStore.pluginUpdatesFlow
         .map { DesktopDataStore.hasUnreadUpdates() }
         .collectAsState(initial = DesktopDataStore.hasUnreadUpdates())
-    
+
     val updatesHistory by DesktopDataStore.pluginUpdatesFlow
         .map { DesktopDataStore.getUpdatesHistory() }
         .collectAsState(initial = DesktopDataStore.getUpdatesHistory())
@@ -71,72 +62,72 @@ fun DesktopAppShell(
         }
     }
 
-            Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-                Row(Modifier.fillMaxSize()) {
-                    // Navigation Dock
-                    NavigationDock(
-                        current = current,
-                        isSyncing = isSyncing,
-                        onNavigate = { navController.navigate(it) },
-                        onSync = {
-                            scope.launch {
-                                if (isSyncing) return@launch
-                                isSyncing = true
-                                try {
-                                    val report = DesktopRepositoryManager.syncAll()
-                                    snackbarHostState.showSnackbar(
-                                        message = report.summary,
-                                        duration = SnackbarDuration.Short,
-                                        withDismissAction = true,
-                                    )
-                                } catch (e: Exception) {
-                                    snackbarHostState.showSnackbar(
-                                        message = "Sync failed: ${e.message}",
-                                        duration = SnackbarDuration.Short,
-                                        withDismissAction = true,
-                                    )
-                                } finally {
-                                    isSyncing = false
-                                }
-                            }
-                        },
-                        onErrorLogs = onErrorLogs,
-                    )
-
-                    // Main content Box
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxHeight()
-                            .background(MaterialTheme.colorScheme.surface),
-                    ) {
-                        val contentPadding = if (current is Screen.Home) {
-                            PaddingValues(0.dp)
-                        } else {
-                            PaddingValues(top = 66.dp, start = 20.dp, end = 20.dp, bottom = 12.dp)
+    Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+        Row(Modifier.fillMaxSize()) {
+            // Navigation Dock
+            NavigationDock(
+                current = current,
+                isSyncing = isSyncing,
+                onNavigate = { navController.navigate(it) },
+                onSync = {
+                    scope.launch {
+                        if (isSyncing) return@launch
+                        isSyncing = true
+                        try {
+                            val report = DesktopRepositoryManager.syncAll()
+                            snackbarHostState.showSnackbar(
+                                message = report.summary,
+                                duration = SnackbarDuration.Short,
+                                withDismissAction = true,
+                            )
+                        } catch (e: Exception) {
+                            snackbarHostState.showSnackbar(
+                                message = "Sync failed: ${e.message}",
+                                duration = SnackbarDuration.Short,
+                                withDismissAction = true,
+                            )
+                        } finally {
+                            isSyncing = false
                         }
-
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .padding(contentPadding),
-                        ) {
-                            content()
-                        }
-
-                        TopBar(
-                            showBack = showBack,
-                            onBack = { navController.goBack() },
-                            isHome = current is Screen.Home,
-                        )
-
-                        SnackbarHost(
-                            hostState = snackbarHostState,
-                            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 24.dp),
-                        )
                     }
+                },
+                onErrorLogs = onErrorLogs,
+            )
+
+            // Main content Box
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight()
+                    .background(MaterialTheme.colorScheme.surface),
+            ) {
+                val contentPadding = if (current is Screen.Home) {
+                    PaddingValues(0.dp)
+                } else {
+                    PaddingValues(top = 66.dp, start = 20.dp, end = 20.dp, bottom = 12.dp)
                 }
+
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(contentPadding),
+                ) {
+                    content()
+                }
+
+                TopBar(
+                    showBack = showBack,
+                    onBack = { navController.goBack() },
+                    isHome = current is Screen.Home,
+                )
+
+                SnackbarHost(
+                    hostState = snackbarHostState,
+                    modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 24.dp),
+                )
             }
+        }
+    }
 }
 
 @Composable
@@ -216,7 +207,6 @@ private fun DockItem(
     label: String,
     selected: Boolean,
     badge: String? = null,
-
     onClick: () -> Unit,
 ) {
     val itemInteraction = remember { MutableInteractionSource() }
@@ -236,8 +226,6 @@ private fun DockItem(
         },
         label = "dockItemBg",
     )
-
-
 
     Box(
         modifier = Modifier

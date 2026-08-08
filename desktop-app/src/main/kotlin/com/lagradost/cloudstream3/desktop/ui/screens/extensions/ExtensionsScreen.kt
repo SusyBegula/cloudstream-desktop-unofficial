@@ -9,7 +9,6 @@ import androidx.compose.ui.unit.dp
 import com.lagradost.cloudstream3.desktop.repo.DesktopRepositoryManager
 import com.lagradost.cloudstream3.desktop.ui.navigation.NavController
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 @Composable
@@ -17,7 +16,7 @@ fun ComposeExtensionScreen(navController: NavController) {
     var selectedTab by remember { mutableStateOf(0) }
     val tabs = listOf("Browse", "Installed", "Repositories")
     val syncGen by DesktopRepositoryManager.syncGeneration.collectAsState()
-    
+
     val coroutineScope = rememberCoroutineScope()
     val viewModel = remember { ExtensionsViewModel(coroutineScope) }
 

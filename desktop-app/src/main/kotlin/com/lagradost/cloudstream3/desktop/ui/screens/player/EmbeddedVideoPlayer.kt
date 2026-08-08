@@ -239,18 +239,31 @@ fun EmbeddedVideoPlayer(
                         style = MaterialTheme.typography.bodyLarge,
                     )
                     Spacer(modifier = Modifier.height(24.dp))
-                    Button(onClick = {
-                        if (isFullscreen) {
-                            windowState?.placement = WindowPlacement.Floating
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        OutlinedButton(onClick = {
+                            if (isFullscreen) {
+                                windowState?.placement = WindowPlacement.Floating
+                            }
+                            launchData.onClosed?.invoke()
+                            onClose()
+                        }) {
+                            Text("Close Player")
                         }
-                        launchData.onClosed?.invoke()
-                        onClose()
-                    }) {
-                        Text("Close Player")
+                        if (launchData.onPlayNext != null) {
+                            Button(onClick = {
+                                if (isFullscreen) {
+                                    windowState?.placement = WindowPlacement.Floating
+                                }
+                                launchData.onClosed?.invoke()
+                                launchData.onPlayNext.invoke()
+                                onClose()
+                            }) {
+                                Text("Play Next Episode")
+                            }
+                        }
                     }
                 }
             }
         }
     }
 }
-

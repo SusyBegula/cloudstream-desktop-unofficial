@@ -24,7 +24,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.lagradost.cloudstream3.MainAPI
 import com.lagradost.cloudstream3.SubtitleFile
-import com.lagradost.cloudstream3.desktop.ui.navigation.NavController
 import com.lagradost.cloudstream3.desktop.ui.components.DesktopUi
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.common.storage.DesktopDataStore
@@ -34,12 +33,11 @@ import com.lagradost.player.impl.VlcPlayer
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
-
 private val vlcPlayer = VlcPlayer()
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun LinksSidePanel(provider: MainAPI, dataUrl: String, history: WatchHistory, onClose: () -> Unit) {
+fun LinksSidePanel(provider: MainAPI, dataUrl: String, history: WatchHistory, onClose: () -> Unit, onPlayNext: (() -> Unit)? = null) {
     val links = remember { mutableStateListOf<ExtractorLink>() }
     val subtitles = remember { mutableStateListOf<SubtitleFile>() }
     var statusText by remember { mutableStateOf("Finding streams for you...") }
@@ -186,6 +184,7 @@ fun LinksSidePanel(provider: MainAPI, dataUrl: String, history: WatchHistory, on
                                 currentPlayingUrl = null
                                 statusText = "Ready — ${links.size} stream${if (links.size == 1) "" else "s"} available."
                             },
+                            onPlayNext = onPlayNext,
                         ),
                     )
                     statusText = "Playing in embedded player: ${link.name}"
@@ -244,107 +243,107 @@ fun LinksSidePanel(provider: MainAPI, dataUrl: String, history: WatchHistory, on
         }
     }
 
-        Surface(modifier = Modifier.fillMaxSize(), color = Color.Transparent) {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
-                Column(modifier = Modifier.widthIn(max = 700.dp).fillMaxHeight()) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(Color.Transparent)
-                            .padding(horizontal = 24.dp, vertical = 16.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                "Select stream",
-                                style = MaterialTheme.typography.titleLarge,
-                                fontWeight = FontWeight.Bold,
-                                color = DesktopUi.TextPrimary,
-                            )
-                            Text(
-                                history.showName,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = DesktopUi.TextMuted,
-                            )
-                        }
-                    }
-                    HorizontalDivider(color = DesktopUi.Divider)
-
-                    StreamStatusCard(
-                        statusText = statusText,
-                        isLoading = isScraping || isLaunchingPlayer,
-                        isScraping = isScraping,
-                        onStop = { scrapeJob?.cancel() },
-                    )
-
-                    PlayerSelector(
-                        selectedPlayer = selectedPlayer,
-                        onSelect = { player ->
-                            selectedPlayer = player
-                            DesktopDataStore.setKey("preferred_player", player)
-                        },
-                    )
-
-                    if (availableQualities.size > 1) {
-                        QualitySelector(
-                            availableQualities = availableQualities,
-                            selectedQuality = selectedQuality,
-                            onSelect = { selectedQuality = it },
+    Surface(modifier = Modifier.fillMaxSize(), color = Color.Transparent) {
+        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
+            Column(modifier = Modifier.widthIn(max = 700.dp).fillMaxHeight()) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(Color.Transparent)
+                        .padding(horizontal = 24.dp, vertical = 16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            "Select stream",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = DesktopUi.TextPrimary,
+                        )
+                        Text(
+                            history.showName,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = DesktopUi.TextMuted,
                         )
                     }
+                }
+                HorizontalDivider(color = DesktopUi.Divider)
 
-                    LazyColumn(
-                        modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp),
-                        verticalArrangement = Arrangement.spacedBy(10.dp),
-                    ) {
-                        if (!isScraping && filteredLinks.isEmpty()) {
-                            item {
-                                Box(modifier = Modifier.fillMaxWidth().padding(vertical = 48.dp), contentAlignment = Alignment.Center) {
-                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                        Icon(Icons.Default.Info, contentDescription = null, modifier = Modifier.size(48.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f))
-                                        Spacer(modifier = Modifier.height(16.dp))
-                                        Text("No Streams Found", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
-                                        Spacer(modifier = Modifier.height(8.dp))
-                                        Text("No playable links were returned. Try another episode or provider.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                    }
+                StreamStatusCard(
+                    statusText = statusText,
+                    isLoading = isScraping || isLaunchingPlayer,
+                    isScraping = isScraping,
+                    onStop = { scrapeJob?.cancel() },
+                )
+
+                PlayerSelector(
+                    selectedPlayer = selectedPlayer,
+                    onSelect = { player ->
+                        selectedPlayer = player
+                        DesktopDataStore.setKey("preferred_player", player)
+                    },
+                )
+
+                if (availableQualities.size > 1) {
+                    QualitySelector(
+                        availableQualities = availableQualities,
+                        selectedQuality = selectedQuality,
+                        onSelect = { selectedQuality = it },
+                    )
+                }
+
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    if (!isScraping && filteredLinks.isEmpty()) {
+                        item {
+                            Box(modifier = Modifier.fillMaxWidth().padding(vertical = 48.dp), contentAlignment = Alignment.Center) {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Icon(Icons.Default.Info, contentDescription = null, modifier = Modifier.size(48.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f))
+                                    Spacer(modifier = Modifier.height(16.dp))
+                                    Text("No Streams Found", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Text("No playable links were returned. Try another episode or provider.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
                             }
                         }
-                        itemsIndexed(filteredLinks, key = { index, it -> "${it.name}-${it.url}-$index" }) { index, link ->
-                            StreamLinkCard(
-                                link = link,
-                                isBusy = isLaunchingPlayer && currentPlayingUrl != link.url,
-                                onPlay = {
-                                    playLink(link)
-                                },
-                                onCopy = {
-                                    if (link.url.isNotBlank()) {
-                                        val selection = java.awt.datatransfer.StringSelection(link.url)
-                                        java.awt.Toolkit.getDefaultToolkit().systemClipboard
-                                            .setContents(selection, selection)
-                                        statusText = "URL copied to clipboard."
-                                    }
-                                },
-                            )
-                        }
-                        item { Spacer(modifier = Modifier.height(24.dp)) }
                     }
+                    itemsIndexed(filteredLinks, key = { index, it -> "${it.name}-${it.url}-$index" }) { index, link ->
+                        StreamLinkCard(
+                            link = link,
+                            isBusy = isLaunchingPlayer && currentPlayingUrl != link.url,
+                            onPlay = {
+                                playLink(link)
+                            },
+                            onCopy = {
+                                if (link.url.isNotBlank()) {
+                                    val selection = java.awt.datatransfer.StringSelection(link.url)
+                                    java.awt.Toolkit.getDefaultToolkit().systemClipboard
+                                        .setContents(selection, selection)
+                                    statusText = "URL copied to clipboard."
+                                }
+                            },
+                        )
+                    }
+                    item { Spacer(modifier = Modifier.height(24.dp)) }
                 }
+            }
 
-                if (playerLaunchError != null) {
-                    AlertDialog(
-                        onDismissRequest = { playerLaunchError = null },
-                        title = { Text("Player error") },
-                        text = { Text(playerLaunchError!!) },
-                        confirmButton = {
-                            TextButton(onClick = { playerLaunchError = null }) { Text("OK") }
-                        },
-                    )
-                }
+            if (playerLaunchError != null) {
+                AlertDialog(
+                    onDismissRequest = { playerLaunchError = null },
+                    title = { Text("Player error") },
+                    text = { Text(playerLaunchError!!) },
+                    confirmButton = {
+                        TextButton(onClick = { playerLaunchError = null }) { Text("OK") }
+                    },
+                )
             }
         }
     }
+}
 
 @Composable
 private fun StreamStatusCard(
@@ -504,4 +503,3 @@ private fun StreamLinkCard(
         }
     }
 }
-

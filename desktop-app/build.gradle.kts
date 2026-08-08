@@ -70,7 +70,7 @@ dependencies {
 
     // Compose Desktop UI
     implementation(compose.desktop.currentOs)
-    implementation(compose.material3)  // material3 already includes core icons
+    implementation(compose.material3) // material3 already includes core icons
     implementation(compose.materialIconsExtended)
     implementation(compose.ui)
     implementation(compose.foundation)
@@ -95,9 +95,10 @@ val stripPlaywrightDriver by tasks.registering {
     group = "build"
 
     doLast {
-        val driverJar = configurations.runtimeClasspath.get()
-            .resolvedConfiguration.resolvedArtifacts
-            .find { it.name == "driver-bundle" }?.file ?: return@doLast
+        val driverJar =
+            configurations.runtimeClasspath.get()
+                .resolvedConfiguration.resolvedArtifacts
+                .find { it.name == "driver-bundle" }?.file ?: return@doLast
 
         val strippedJar = layout.buildDirectory.get().asFile.resolve("playwright-driver-stripped.jar")
         if (strippedJar.exists() && strippedJar.lastModified() > driverJar.lastModified()) {
@@ -106,11 +107,12 @@ val stripPlaywrightDriver by tasks.registering {
         }
 
         val osName = System.getProperty("os.name").lowercase()
-        val platformsToStrip = when {
-            osName.contains("win") -> listOf("driver/mac", "driver/mac-arm64", "driver/linux", "driver/linux-arm64")
-            osName.contains("mac") -> listOf("driver/win32-x64", "driver/linux", "driver/linux-arm64")
-            else -> listOf("driver/win32-x64", "driver/mac", "driver/mac-arm64") // Retain Linux binaries
-        }
+        val platformsToStrip =
+            when {
+                osName.contains("win") -> listOf("driver/mac", "driver/mac-arm64", "driver/linux", "driver/linux-arm64")
+                osName.contains("mac") -> listOf("driver/win32-x64", "driver/linux", "driver/linux-arm64")
+                else -> listOf("driver/win32-x64", "driver/mac", "driver/mac-arm64") // Retain Linux binaries
+            }
 
         println("Stripping unused platform entries from Playwright driver-bundle (${driverJar.length() / 1024 / 1024}MB)...")
 
@@ -158,13 +160,13 @@ compose.desktop {
             } else if (osName.contains("nix") || osName.contains("nux") || osName.contains("aix")) {
                 targetFormats(
                     org.jetbrains.compose.desktop.application.dsl.TargetFormat.Deb,
-                    org.jetbrains.compose.desktop.application.dsl.TargetFormat.AppImage
+                    org.jetbrains.compose.desktop.application.dsl.TargetFormat.AppImage,
                 )
             } else {
                 targetFormats(
                     org.jetbrains.compose.desktop.application.dsl.TargetFormat.Msi,
                     org.jetbrains.compose.desktop.application.dsl.TargetFormat.Deb,
-                    org.jetbrains.compose.desktop.application.dsl.TargetFormat.AppImage
+                    org.jetbrains.compose.desktop.application.dsl.TargetFormat.AppImage,
                 )
             }
 
@@ -172,14 +174,14 @@ compose.desktop {
             packageVersion = "0.1.0"
             description = "CloudStream Desktop Client"
             vendor = "CloudStream"
-            includeAllModules = true  // Required — jlink cannot detect dynamically-loaded modules (JNA, Playwright, Conscrypt)
+            includeAllModules = true // Required — jlink cannot detect dynamically-loaded modules (JNA, Playwright, Conscrypt)
             appResourcesRootDir.set(project.layout.projectDirectory.dir("appResources"))
 
             windows {
                 iconFile.set(project.file("src/main/resources/logo_installer.ico"))
                 menuGroup = "CloudStream Desktop"
                 upgradeUuid = "d7e9b04f-723a-4467-84df-fcf470c1ae02"
-                shortcut = true       // Creates a Desktop shortcut during install
+                shortcut = true // Creates a Desktop shortcut during install
                 perUserInstall = true // Installs per-user, avoids needing admin rights
             }
 

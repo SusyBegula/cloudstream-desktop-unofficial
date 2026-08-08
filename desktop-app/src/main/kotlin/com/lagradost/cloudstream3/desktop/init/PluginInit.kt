@@ -83,7 +83,7 @@ fun loadClonedSites() {
             val mapper = com.fasterxml.jackson.module.kotlin.jacksonObjectMapper()
             val list = mapper.readValue<List<com.lagradost.cloudstream3.desktop.models.CustomSite>>(
                 clonedSitesJson,
-                object : com.fasterxml.jackson.core.type.TypeReference<List<com.lagradost.cloudstream3.desktop.models.CustomSite>>() {}
+                object : com.fasterxml.jackson.core.type.TypeReference<List<com.lagradost.cloudstream3.desktop.models.CustomSite>>() {},
             )
             if (list.isEmpty()) return
 

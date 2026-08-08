@@ -78,4 +78,3 @@ fun ComposeSettingsScreen(navController: NavController) {
         }
     }
 }
-

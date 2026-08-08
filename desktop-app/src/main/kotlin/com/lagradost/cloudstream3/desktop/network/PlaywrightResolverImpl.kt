@@ -47,10 +47,10 @@ object PlaywrightResolverImpl {
                 )
 
                 val page = context.newPage()
-                
+
                 page.setDefaultNavigationTimeout(15000.0) // 15 seconds max to load
-                page.setDefaultTimeout(15000.0)           // 15 seconds max for any action
-                
+                page.setDefaultTimeout(15000.0) // 15 seconds max for any action
+
                 page.route("**/*") { route ->
                     val type = route.request().resourceType()
                     if (type == "image" || type == "media" || type == "font" || type == "stylesheet") {

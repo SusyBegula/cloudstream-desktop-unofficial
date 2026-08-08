@@ -33,11 +33,12 @@ object PluginSettingsScanner {
                 if (key.length in 2..50 && !key.contains("\n") && !key.contains(" ")) {
                     var guessedType = "String"
                     var guessedDefault: Any = ""
-                    
+
                     val lowerKey = key.lowercase()
-                    if (lowerKey.startsWith("provider") || lowerKey.endsWith("enable") || 
-                        lowerKey.endsWith("_on") || lowerKey.startsWith("seen_") || 
-                        lowerKey.contains("toggle") || lowerKey.contains("use_")) {
+                    if (lowerKey.startsWith("provider") || lowerKey.endsWith("enable") ||
+                        lowerKey.endsWith("_on") || lowerKey.startsWith("seen_") ||
+                        lowerKey.contains("toggle") || lowerKey.contains("use_")
+                    ) {
                         guessedType = "Boolean"
                         // Usually providers and toggles default to true
                         guessedDefault = true
@@ -51,7 +52,7 @@ object PluginSettingsScanner {
                         key = key,
                         type = guessedType,
                         defaultValue = guessedDefault,
-                        isGlobal = true
+                        isGlobal = true,
                     )
                 }
             }
@@ -72,11 +73,13 @@ object PluginSettingsScanner {
             val insn = instructions[i]
             if (insn is MethodInsnNode) {
                 // Look for DataStore.getKey, DataStore.setKey, or SharedPreferences.getString/getBoolean
-                if (insn.owner == "com/lagradost/cloudstream3/utils/DataStore" && 
-                    (insn.name == "getKey" || insn.name == "setKey")) {
+                if (insn.owner == "com/lagradost/cloudstream3/utils/DataStore" &&
+                    (insn.name == "getKey" || insn.name == "setKey")
+                ) {
                     extractPrecedingStringLdc(instructions, i, keys)
                 } else if (insn.owner == "android/content/SharedPreferences" &&
-                    (insn.name == "getString" || insn.name == "getBoolean" || insn.name == "getInt" || insn.name == "getStringSet")) {
+                    (insn.name == "getString" || insn.name == "getBoolean" || insn.name == "getInt" || insn.name == "getStringSet")
+                ) {
                     extractPrecedingStringLdc(instructions, i, keys)
                 }
             }
@@ -92,7 +95,7 @@ object PluginSettingsScanner {
                 val str = prevInsn.cst as String
                 keys.add(str)
                 // If it's SharedPreferences, the first string argument is the key.
-                // We might find multiple strings (e.g., the default value). 
+                // We might find multiple strings (e.g., the default value).
                 // We add them all; the regex filter will drop obvious non-keys.
             }
         }

@@ -2,10 +2,10 @@ package com.lagradost.cloudstream3.utils
 
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.fasterxml.jackson.module.kotlin.readValue
+import com.lagradost.common.logging.AppLogger
 import com.lagradost.common.platform.PlatformPaths
 import java.io.File
 import java.util.concurrent.ConcurrentHashMap
-import com.lagradost.common.logging.AppLogger
 
 object DataStore {
     const val PREFERENCES_NAME = "rebuild_preference"
@@ -103,7 +103,7 @@ object DataStore {
             val typeName = T::class.simpleName ?: "String"
             com.lagradost.common.storage.PluginSettingsSchemaRegistry.register(pluginName + "_", key, typeName, v, true)
         }
-        
+
         if (v != null) {
             try {
                 val json = mapper.writeValueAsString(v)

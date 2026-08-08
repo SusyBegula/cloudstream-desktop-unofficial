@@ -1,8 +1,8 @@
 package com.lagradost.cloudstream3.network
 
 import com.lagradost.cloudstream3.app
-import com.lagradost.nicehttp.Requests.Companion.await
 import com.lagradost.common.logging.AppLogger
+import com.lagradost.nicehttp.Requests.Companion.await
 import kotlinx.coroutines.runBlocking
 import okhttp3.Headers
 import okhttp3.Interceptor

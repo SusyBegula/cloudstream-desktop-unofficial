@@ -5,13 +5,10 @@ package com.lagradost.cloudstream3.desktop.network
 import com.lagradost.cloudstream3.app
 import com.lagradost.cloudstream3.insecureApp
 import com.lagradost.cloudstream3.network.CloudflareKiller
+import com.lagradost.common.logging.AppLogger
 import com.lagradost.common.storage.DesktopDataStore
 import com.lagradost.nicehttp.ignoreAllSSLErrors
-import com.lagradost.common.logging.AppLogger
 import okhttp3.OkHttpClient
-import java.security.KeyStore
-import java.security.cert.CertificateException
-import java.security.cert.X509Certificate
 import java.util.concurrent.TimeUnit
 import javax.net.ssl.*
 
@@ -28,7 +25,6 @@ enum class DohProvider(val title: String) {
 
 object NetworkConfig {
     const val PREF_DOH_PROVIDER = "doh_provider"
-
 
     /**
      * Rebuilds and assigns the global NiceHttp clients (`app.baseClient` and `insecureApp.baseClient`)

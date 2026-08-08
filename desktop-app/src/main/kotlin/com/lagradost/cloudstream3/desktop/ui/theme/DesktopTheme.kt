@@ -17,8 +17,11 @@ fun accentColorFromName(name: String): Color = when (name) {
 }
 
 fun buildDesktopColors(primaryColor: Color, isLightMode: Boolean, amoledMode: Boolean): DesktopThemeColors {
-    return if (isLightMode) lightDesktopColors(primaryColor)
-    else darkDesktopColors(primaryColor, amoledMode)
+    return if (isLightMode) {
+        lightDesktopColors(primaryColor)
+    } else {
+        darkDesktopColors(primaryColor, amoledMode)
+    }
 }
 
 fun buildColorScheme(primaryColor: Color, desktopColors: DesktopThemeColors, isLightMode: Boolean): ColorScheme {

@@ -8,7 +8,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-
 import com.lagradost.common.storage.PluginSettingsSchemaRegistry
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -46,7 +45,7 @@ fun PluginSettingsDialog(
                                     com.lagradost.cloudstream3.utils.DataStore.getKey<Any>(fullKey) ?: schema.defaultValue
                                 } else {
                                     com.lagradost.common.storage.DesktopDataStore.getKey<Any>(fullKey) ?: schema.defaultValue
-                                }
+                                },
                             )
                         }
 
@@ -65,11 +64,17 @@ fun PluginSettingsDialog(
                                         onCheckedChange = { newValue ->
                                             currentValue = newValue
                                             if (schema.isGlobal) {
-                                                if (newValue == null) com.lagradost.cloudstream3.utils.DataStore.removeKey(fullKey)
-                                                else com.lagradost.cloudstream3.utils.DataStore.setKey(fullKey, newValue)
+                                                if (newValue == null) {
+                                                    com.lagradost.cloudstream3.utils.DataStore.removeKey(fullKey)
+                                                } else {
+                                                    com.lagradost.cloudstream3.utils.DataStore.setKey(fullKey, newValue)
+                                                }
                                             } else {
-                                                if (newValue == null) com.lagradost.common.storage.DesktopDataStore.removeKey(fullKey)
-                                                else com.lagradost.common.storage.DesktopDataStore.setKey(fullKey, newValue)
+                                                if (newValue == null) {
+                                                    com.lagradost.common.storage.DesktopDataStore.removeKey(fullKey)
+                                                } else {
+                                                    com.lagradost.common.storage.DesktopDataStore.setKey(fullKey, newValue)
+                                                }
                                             }
                                         },
                                     )
@@ -87,11 +92,17 @@ fun PluginSettingsDialog(
                                             if (parsed != null || newValue.isEmpty()) {
                                                 currentValue = parsed
                                                 if (schema.isGlobal) {
-                                                    if (parsed == null) com.lagradost.cloudstream3.utils.DataStore.removeKey(fullKey)
-                                                    else com.lagradost.cloudstream3.utils.DataStore.setKey(fullKey, parsed)
+                                                    if (parsed == null) {
+                                                        com.lagradost.cloudstream3.utils.DataStore.removeKey(fullKey)
+                                                    } else {
+                                                        com.lagradost.cloudstream3.utils.DataStore.setKey(fullKey, parsed)
+                                                    }
                                                 } else {
-                                                    if (parsed == null) com.lagradost.common.storage.DesktopDataStore.removeKey(fullKey)
-                                                    else com.lagradost.common.storage.DesktopDataStore.setKey(fullKey, parsed)
+                                                    if (parsed == null) {
+                                                        com.lagradost.common.storage.DesktopDataStore.removeKey(fullKey)
+                                                    } else {
+                                                        com.lagradost.common.storage.DesktopDataStore.setKey(fullKey, parsed)
+                                                    }
                                                 }
                                             }
                                         },
@@ -106,11 +117,17 @@ fun PluginSettingsDialog(
                                         onValueChange = { newValue ->
                                             currentValue = newValue
                                             if (schema.isGlobal) {
-                                                if (newValue == null) com.lagradost.cloudstream3.utils.DataStore.removeKey(fullKey)
-                                                else com.lagradost.cloudstream3.utils.DataStore.setKey(fullKey, newValue)
+                                                if (newValue == null) {
+                                                    com.lagradost.cloudstream3.utils.DataStore.removeKey(fullKey)
+                                                } else {
+                                                    com.lagradost.cloudstream3.utils.DataStore.setKey(fullKey, newValue)
+                                                }
                                             } else {
-                                                if (newValue == null) com.lagradost.common.storage.DesktopDataStore.removeKey(fullKey)
-                                                else com.lagradost.common.storage.DesktopDataStore.setKey(fullKey, newValue)
+                                                if (newValue == null) {
+                                                    com.lagradost.common.storage.DesktopDataStore.removeKey(fullKey)
+                                                } else {
+                                                    com.lagradost.common.storage.DesktopDataStore.setKey(fullKey, newValue)
+                                                }
                                             }
                                         },
                                         label = { Text(schema.key) },

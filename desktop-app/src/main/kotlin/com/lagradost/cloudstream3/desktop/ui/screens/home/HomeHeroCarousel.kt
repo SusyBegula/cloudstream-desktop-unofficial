@@ -3,7 +3,6 @@ package com.lagradost.cloudstream3.desktop.ui.screens.home
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
@@ -65,9 +64,9 @@ fun HomeHeroCarousel(items: List<SearchResponse>, provider: MainAPI?, onItemClic
     if (items.isEmpty()) return
 
     val displayItems = items.take(10)
-    val MAX_PAGES = displayItems.size * 1000
-    val initialPage = MAX_PAGES / 2
-    val pagerState = rememberPagerState(initialPage = initialPage, pageCount = { MAX_PAGES })
+    val maxPages = displayItems.size * 1000
+    val initialPage = maxPages / 2
+    val pagerState = rememberPagerState(initialPage = initialPage, pageCount = { maxPages })
     val metaMap = remember { mutableStateMapOf<String, HeroMeta>() }
     val scope = rememberCoroutineScope()
 
@@ -288,7 +287,7 @@ fun HomeHeroCarousel(items: List<SearchResponse>, provider: MainAPI?, onItemClic
                         .fillMaxSize()
                         .padding(start = 56.dp, end = 56.dp, bottom = 90.dp, top = 24.dp),
                     verticalAlignment = Alignment.Bottom,
-                    horizontalArrangement = Arrangement.Start
+                    horizontalArrangement = Arrangement.Start,
                 ) {
                     // Left Side: Clear Poster Image next to the text
                     if (posterUrl != null) {
@@ -301,7 +300,7 @@ fun HomeHeroCarousel(items: List<SearchResponse>, provider: MainAPI?, onItemClic
                                 .aspectRatio(2f / 3f)
                                 .clip(RoundedCornerShape(16.dp))
                                 .border(1.dp, Color.White.copy(alpha = 0.2f), RoundedCornerShape(16.dp))
-                                .shadow(24.dp, RoundedCornerShape(16.dp))
+                                .shadow(24.dp, RoundedCornerShape(16.dp)),
                         )
                         Spacer(modifier = Modifier.width(48.dp))
                     }
@@ -477,4 +476,3 @@ fun HomeHeroCarousel(items: List<SearchResponse>, provider: MainAPI?, onItemClic
         }
     }
 }
-

@@ -23,7 +23,7 @@ import com.lagradost.common.storage.WatchHistory
 import com.lagradost.player.impl.PlayerLinkHandler
 
 @Composable
-fun EpisodeCard(ep: Episode, isLatest: Boolean, history: WatchHistory?, provider: MainAPI, data: LoadResponse, onPlay: (Triple<MainAPI, String, WatchHistory>) -> Unit) {
+fun EpisodeCard(ep: Episode, isLatest: Boolean, history: WatchHistory?, provider: MainAPI, data: LoadResponse, onPlay: (LinksPanelRequest) -> Unit) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -110,7 +110,39 @@ fun EpisodeCard(ep: Episode, isLatest: Boolean, history: WatchHistory?, provider
     }
 }
 
-fun navigateToPlay(provider: MainAPI, data: LoadResponse, ep: Episode, onPlay: (Triple<MainAPI, String, WatchHistory>) -> Unit) {
+data class LinksPanelRequest(
+    val provider: MainAPI,
+    val dataUrl: String,
+    val history: WatchHistory,
+    val onPlayNext: (() -> Unit)? = null,
+)
+
+private fun resolveNextEpisode(data: LoadResponse, ep: Episode): Episode? = when (data) {
+    is TvSeriesLoadResponse -> {
+        val currentSeason = ep.season
+        val sortedSeasonEps = data.episodes
+            .filter { it.season == currentSeason || (it.season == null && currentSeason == null) }
+            .sortedBy { it.episode ?: Int.MAX_VALUE }
+        val currentIdx = sortedSeasonEps.indexOfFirst { it.data == ep.data }
+        val nextEpSameSeason = if (currentIdx >= 0 && currentIdx + 1 < sortedSeasonEps.size) sortedSeasonEps[currentIdx + 1] else null
+        nextEpSameSeason ?: run {
+            val nextSeason = (currentSeason ?: 0) + 1
+            data.episodes
+                .filter { it.season == nextSeason }
+                .minByOrNull { it.episode ?: Int.MAX_VALUE }
+        }
+    }
+    is AnimeLoadResponse -> {
+        val dubEps = data.episodes.values
+            .find { list -> list.any { it.data == ep.data } }
+            ?.sortedBy { it.episode ?: Int.MAX_VALUE }
+        val currentIdx = dubEps?.indexOfFirst { it.data == ep.data } ?: -1
+        if (dubEps != null && currentIdx >= 0 && currentIdx + 1 < dubEps.size) dubEps[currentIdx + 1] else null
+    }
+    else -> null
+}
+
+fun navigateToPlay(provider: MainAPI, data: LoadResponse, ep: Episode, onPlay: (LinksPanelRequest) -> Unit) {
     val parentId = DesktopDataStore.watchHistoryId(
         apiName = provider.name,
         showUrl = data.url,
@@ -142,5 +174,7 @@ fun navigateToPlay(provider: MainAPI, data: LoadResponse, ep: Episode, onPlay: (
             patchedData = patchedData.replaceFirst("{", "{\"tvtype\":\"\",")
         }
     }
-    onPlay(Triple(provider, patchedData, history))
+    val nextEp = resolveNextEpisode(data, ep)
+    val onPlayNext: (() -> Unit)? = nextEp?.let { ne -> { navigateToPlay(provider, data, ne, onPlay) } }
+    onPlay(LinksPanelRequest(provider, patchedData, history, onPlayNext))
 }

@@ -13,7 +13,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
-import com.lagradost.cloudstream3.desktop.ui.components.FlagImage
 
 @Composable
 fun ExtensionCard(
@@ -69,7 +68,7 @@ fun ExtensionCard(
                         Icons.Default.Extension,
                         contentDescription = null,
                         modifier = Modifier.size(32.dp),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             }
@@ -80,7 +79,7 @@ fun ExtensionCard(
                         text = name,
                         fontWeight = FontWeight.ExtraBold,
                         maxLines = 1,
-                        style = MaterialTheme.typography.titleMedium
+                        style = MaterialTheme.typography.titleMedium,
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     FlagImage(language)
@@ -124,7 +123,7 @@ fun ExtensionCard(
                         } else {
                             Text(
                                 if (installStatus == "Installed") "Installed" else "Install",
-                                style = MaterialTheme.typography.labelMedium
+                                style = MaterialTheme.typography.labelMedium,
                             )
                         }
                     }

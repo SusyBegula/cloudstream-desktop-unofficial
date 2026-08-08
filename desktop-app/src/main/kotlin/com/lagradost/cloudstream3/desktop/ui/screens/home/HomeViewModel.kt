@@ -6,7 +6,6 @@ import com.lagradost.cloudstream3.SearchResponse
 import com.lagradost.cloudstream3.desktop.DesktopErrorReporter
 import com.lagradost.cloudstream3.desktop.repo.DesktopRepositoryManager
 import com.lagradost.common.storage.DesktopDataStore
-import com.lagradost.player.impl.PlayerLinkHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.*
@@ -154,7 +153,7 @@ class HomeViewModel(private val coroutineScope: CoroutineScope) {
                 } else {
                     selectedProvider.value?.let { listOf(it) } ?: emptyList()
                 }
-                
+
                 val resultsArray = Array<Pair<MainAPI, List<SearchResponse>>?>(activeProviders.size) { null }
 
                 withContext(Dispatchers.IO) {

@@ -332,15 +332,15 @@ fun ComposeMpvPlayer(
 
 private fun resolveMpvExecutable(isWindows: Boolean): File? {
     val names = if (isWindows) listOf("libmpv-2.dll") else listOf("libmpv.so.2", "libmpv.so.1", "libmpv.so", "libmpv.dylib")
-    
+
     val resDir = System.getProperty("compose.application.resources.dir")
-    
+
     val candidates = listOfNotNull(
         resDir?.let { File(it, "mpv") },
         File("mpv"),
         File("2_cloudstream_desktop/mpv"),
         File("desktop-app/mpv"),
-        File("desktop-app/appResources/mpv")
+        File("desktop-app/appResources/mpv"),
     )
     for (base in candidates) {
         for (name in names) {
@@ -436,7 +436,7 @@ private fun resolveUserMpvConfigDir(mpvDir: File?): File? {
         xdgConfig?.let { File(it, "mpv") },
         homeDir?.let { File(it, ".config/mpv") },
         homeDir?.let { File(it, ".mpv") },
-        System.getenv("APPDATA")?.let { File(it, "mpv") }
+        System.getenv("APPDATA")?.let { File(it, "mpv") },
     )
 
     return candidates.firstOrNull { it.isDirectory }

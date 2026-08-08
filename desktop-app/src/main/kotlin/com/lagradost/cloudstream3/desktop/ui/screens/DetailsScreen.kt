@@ -19,23 +19,20 @@ import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SkipNext
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.desktop.ui.navigation.NavController
-import com.lagradost.cloudstream3.desktop.ui.navigation.Screen
 import com.lagradost.cloudstream3.desktop.ui.screens.details.*
-import com.lagradost.common.storage.WatchHistory
 import com.lagradost.player.impl.PlayerLinkHandler
 import dev.chrisbanes.haze.HazeState
 
@@ -53,105 +50,106 @@ fun ComposeDetailsScreen(navController: NavController, provider: MainAPI, url: S
     val isPanelOpen by viewModel.isPanelOpen.collectAsState()
     val enrichmentTrigger by viewModel.enrichmentTrigger.collectAsState()
 
-        Surface(modifier = Modifier.fillMaxSize()) {
-            Box(modifier = Modifier.fillMaxSize()) {
-                // 1. Details Content
-                if (isLoading) {
-                    if (fakeData != null) {
-                        DetailsContent(navController, provider, fakeData!!, enrichmentTrigger, isLoading = true, onPlay = viewModel::openLinksPanel)
-                    } else {
-                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            CircularProgressIndicator()
-                        }
-                    }
-                } else if (response != null) {
-                    DetailsContent(navController, provider, response!!, enrichmentTrigger, isLoading = false, onPlay = viewModel::openLinksPanel)
+    Surface(modifier = Modifier.fillMaxSize()) {
+        Box(modifier = Modifier.fillMaxSize()) {
+            // 1. Details Content
+            if (isLoading) {
+                if (fakeData != null) {
+                    DetailsContent(navController, provider, fakeData!!, enrichmentTrigger, isLoading = true, onPlay = viewModel::openLinksPanel)
                 } else {
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text(
-                                text = if (errorMessage != null) "Error: $errorMessage" else "Failed to load details.",
-                                color = MaterialTheme.colorScheme.error,
-                                style = MaterialTheme.typography.titleMedium,
-                            )
-                            Spacer(modifier = Modifier.height(16.dp))
-                            Button(onClick = { navController.goBack() }) {
-                                Text("Go Back")
-                            }
+                        CircularProgressIndicator()
+                    }
+                }
+            } else if (response != null) {
+                DetailsContent(navController, provider, response!!, enrichmentTrigger, isLoading = false, onPlay = viewModel::openLinksPanel)
+            } else {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(
+                            text = if (errorMessage != null) "Error: $errorMessage" else "Failed to load details.",
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.titleMedium,
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Button(onClick = { navController.goBack() }) {
+                            Text("Go Back")
                         }
                     }
                 }
+            }
 
-                // 2. Dim Overlay
-                AnimatedVisibility(
-                    visible = isPanelOpen,
-                    enter = fadeIn(animationSpec = tween(300)),
-                    exit = fadeOut(animationSpec = tween(300)),
+            // 2. Dim Overlay
+            AnimatedVisibility(
+                visible = isPanelOpen,
+                enter = fadeIn(animationSpec = tween(300)),
+                exit = fadeOut(animationSpec = tween(300)),
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Color.Black.copy(alpha = 0.4f))
+                        .clickable { viewModel.closeLinksPanel() },
+                )
+            }
+
+            // 3. Side Panel with Links
+            if (activeLinkData != null) {
+                val offsetX by animateDpAsState(
+                    targetValue = if (isPanelOpen) 0.dp else 450.dp,
+                    animationSpec = tween(300),
+                )
+                Row(
+                    modifier = Modifier
+                        .align(Alignment.CenterEnd)
+                        .offset(x = offsetX),
                 ) {
                     Box(
                         modifier = Modifier
-                            .fillMaxSize()
-                            .background(Color.Black.copy(alpha = 0.4f))
-                            .clickable { viewModel.closeLinksPanel() },
-                    )
-                }
-
-                // 3. Side Panel with Links
-                if (activeLinkData != null) {
-                    val offsetX by animateDpAsState(
-                        targetValue = if (isPanelOpen) 0.dp else 450.dp,
-                        animationSpec = tween(300),
-                    )
-                    Row(
-                        modifier = Modifier
-                            .align(Alignment.CenterEnd)
-                            .offset(x = offsetX),
+                            .padding(top = 24.dp)
+                            .background(Color.Black.copy(alpha = 0.6f), shape = RoundedCornerShape(topStart = 12.dp, bottomStart = 12.dp))
+                            .clickable { if (isPanelOpen) viewModel.closeLinksPanel() else viewModel.openLinksPanel(activeLinkData!!) }
+                            .padding(16.dp),
                     ) {
-                        Box(
-                            modifier = Modifier
-                                .padding(top = 24.dp)
-                                .background(Color.Black.copy(alpha = 0.6f), shape = RoundedCornerShape(topStart = 12.dp, bottomStart = 12.dp))
-                                .clickable { if (isPanelOpen) viewModel.closeLinksPanel() else viewModel.openLinksPanel(activeLinkData!!) }
-                                .padding(16.dp),
-                        ) {
-                            Icon(
-                                if (isPanelOpen) Icons.Default.Close else Icons.Default.Menu,
-                                contentDescription = "Toggle links",
-                                tint = MaterialTheme.colorScheme.onSurface,
-                            )
-                        }
+                        Icon(
+                            if (isPanelOpen) Icons.Default.Close else Icons.Default.Menu,
+                            contentDescription = "Toggle links",
+                            tint = MaterialTheme.colorScheme.onSurface,
+                        )
+                    }
 
-                        Box(
-                            modifier = Modifier
-                                .fillMaxHeight()
-                                .width(450.dp)
-                                .shadow(24.dp)
-                                .background(
-                                    Brush.verticalGradient(
-                                        colors = listOf(
-                                            Color(0xFF0C0C14).copy(alpha = 0.75f),
-                                            Color(0xFF1A1A24).copy(alpha = 0.85f),
-                                        ),
+                    Box(
+                        modifier = Modifier
+                            .fillMaxHeight()
+                            .width(450.dp)
+                            .shadow(24.dp)
+                            .background(
+                                Brush.verticalGradient(
+                                    colors = listOf(
+                                        Color(0xFF0C0C14).copy(alpha = 0.75f),
+                                        Color(0xFF1A1A24).copy(alpha = 0.85f),
                                     ),
                                 ),
-                        ) {
-                            activeLinkData?.let { (linkProvider, linkUrl, linkHistory) ->
-                                LinksSidePanel(
-                                    provider = linkProvider,
-                                    dataUrl = linkUrl,
-                                    history = linkHistory,
-                                    onClose = { viewModel.closeLinksPanel() },
-                                )
-                            }
+                            ),
+                    ) {
+                        activeLinkData?.let { (linkProvider, linkUrl, linkHistory, linkOnPlayNext) ->
+                            LinksSidePanel(
+                                provider = linkProvider,
+                                dataUrl = linkUrl,
+                                history = linkHistory,
+                                onClose = { viewModel.closeLinksPanel() },
+                                onPlayNext = linkOnPlayNext,
+                            )
                         }
                     }
                 }
             }
         }
     }
+}
 
 @Composable
-fun DetailsContent(navController: NavController, provider: MainAPI, data: LoadResponse, enrichmentTrigger: Int, isLoading: Boolean = false, onPlay: (Triple<MainAPI, String, WatchHistory>) -> Unit) {
+fun DetailsContent(navController: NavController, provider: MainAPI, data: LoadResponse, enrichmentTrigger: Int, isLoading: Boolean = false, onPlay: (LinksPanelRequest) -> Unit) {
     val scrollState = androidx.compose.foundation.lazy.rememberLazyListState()
     val hazeState = remember { HazeState() }
 
@@ -358,7 +356,10 @@ fun DetailsContent(navController: NavController, provider: MainAPI, data: LoadRe
                                                         seasons.forEach { season ->
                                                             Tab(
                                                                 selected = selectedSeason == season,
-                                                                onClick = { selectedSeason = season; episodeSearchQuery = "" },
+                                                                onClick = {
+                                                                    selectedSeason = season
+                                                                    episodeSearchQuery = ""
+                                                                },
                                                                 text = { Text("Season $season", fontWeight = FontWeight.Bold) },
                                                             )
                                                         }
@@ -400,7 +401,7 @@ fun DetailsContent(navController: NavController, provider: MainAPI, data: LoadRe
                                                 text = if (isSortAscending) "Sort ▼" else "Sort ▲",
                                                 style = MaterialTheme.typography.titleMedium,
                                                 fontWeight = FontWeight.Bold,
-                                                color = MaterialTheme.colorScheme.onSurface
+                                                color = MaterialTheme.colorScheme.onSurface,
                                             )
                                         }
                                     }
@@ -487,7 +488,10 @@ fun DetailsContent(navController: NavController, provider: MainAPI, data: LoadRe
                                                         dubStatuses.forEach { dub ->
                                                             Tab(
                                                                 selected = selectedDub == dub,
-                                                                onClick = { selectedDub = dub; episodeSearchQuery = "" },
+                                                                onClick = {
+                                                                    selectedDub = dub
+                                                                    episodeSearchQuery = ""
+                                                                },
                                                                 text = { Text(dub.name, fontWeight = FontWeight.Bold) },
                                                             )
                                                         }
@@ -529,7 +533,7 @@ fun DetailsContent(navController: NavController, provider: MainAPI, data: LoadRe
                                                 text = if (isSortAscending) "Sort ▼" else "Sort ▲",
                                                 style = MaterialTheme.typography.titleMedium,
                                                 fontWeight = FontWeight.Bold,
-                                                color = MaterialTheme.colorScheme.onSurface
+                                                color = MaterialTheme.colorScheme.onSurface,
                                             )
                                         }
                                     }
@@ -544,18 +548,24 @@ fun DetailsContent(navController: NavController, provider: MainAPI, data: LoadRe
                     val filteredEpisodes = data.episodes
                         .filter { it.season == selectedSeason || (it.season == null && selectedSeason == 1) }
                         .let { list ->
-                            if (isSortAscending) list.sortedBy { it.episode ?: Int.MAX_VALUE }
-                            else list.sortedByDescending { it.episode ?: Int.MIN_VALUE }
-                        }
-                        .let { list ->
-                            if (episodeSearchQuery.isBlank()) list
-                            else list.filter { ep ->
-                                val q = episodeSearchQuery.trim()
-                                ep.name?.contains(q, ignoreCase = true) == true ||
-                                ep.episode?.toString()?.contains(q) == true
+                            if (isSortAscending) {
+                                list.sortedBy { it.episode ?: Int.MAX_VALUE }
+                            } else {
+                                list.sortedByDescending { it.episode ?: Int.MIN_VALUE }
                             }
                         }
-                        
+                        .let { list ->
+                            if (episodeSearchQuery.isBlank()) {
+                                list
+                            } else {
+                                list.filter { ep ->
+                                    val q = episodeSearchQuery.trim()
+                                    ep.name?.contains(q, ignoreCase = true) == true ||
+                                        ep.episode?.toString()?.contains(q) == true
+                                }
+                            }
+                        }
+
                     if (filteredEpisodes.isEmpty()) {
                         item {
                             Box(modifier = Modifier.fillMaxWidth().padding(vertical = 48.dp), contentAlignment = Alignment.Center) {
@@ -582,18 +592,24 @@ fun DetailsContent(navController: NavController, provider: MainAPI, data: LoadRe
                 } else if (data is AnimeLoadResponse) {
                     val filteredEpisodes = (selectedDub?.let { data.episodes[it] } ?: emptyList())
                         .let { list ->
-                            if (isSortAscending) list.sortedBy { it.episode ?: Int.MAX_VALUE }
-                            else list.sortedByDescending { it.episode ?: Int.MIN_VALUE }
-                        }
-                        .let { list ->
-                            if (episodeSearchQuery.isBlank()) list
-                            else list.filter { ep ->
-                                val q = episodeSearchQuery.trim()
-                                ep.name?.contains(q, ignoreCase = true) == true ||
-                                ep.episode?.toString()?.contains(q) == true
+                            if (isSortAscending) {
+                                list.sortedBy { it.episode ?: Int.MAX_VALUE }
+                            } else {
+                                list.sortedByDescending { it.episode ?: Int.MIN_VALUE }
                             }
                         }
-                        
+                        .let { list ->
+                            if (episodeSearchQuery.isBlank()) {
+                                list
+                            } else {
+                                list.filter { ep ->
+                                    val q = episodeSearchQuery.trim()
+                                    ep.name?.contains(q, ignoreCase = true) == true ||
+                                        ep.episode?.toString()?.contains(q) == true
+                                }
+                            }
+                        }
+
                     if (filteredEpisodes.isEmpty()) {
                         item {
                             Box(modifier = Modifier.fillMaxWidth().padding(vertical = 48.dp), contentAlignment = Alignment.Center) {
@@ -633,4 +649,3 @@ fun DetailsContent(navController: NavController, provider: MainAPI, data: LoadRe
         }
     }
 }
-

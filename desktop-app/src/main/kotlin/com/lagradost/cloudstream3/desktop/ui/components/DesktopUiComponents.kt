@@ -127,8 +127,8 @@ fun CategoryRowWithHeader(
     trailingHeaderExtra: @Composable (() -> Unit)? = null,
     content: LazyListScope.() -> Unit,
 ) {
-    val initialIndex = remember(isInfinite, itemCount) { 
-        if (isInfinite && itemCount > 0) (Int.MAX_VALUE / 2) - ((Int.MAX_VALUE / 2) % itemCount) else 0 
+    val initialIndex = remember(isInfinite, itemCount) {
+        if (isInfinite && itemCount > 0) (Int.MAX_VALUE / 2) - ((Int.MAX_VALUE / 2) % itemCount) else 0
     }
     val listState = rememberLazyListState(initialFirstVisibleItemIndex = initialIndex)
     val scope = rememberCoroutineScope()
@@ -273,7 +273,7 @@ fun Modifier.posterHoverEffect(): Modifier {
     val borderColor by androidx.compose.animation.animateColorAsState(
         targetValue = if (hovered) MaterialTheme.colorScheme.primary else Color.Transparent,
         animationSpec = tween(180),
-        label = "posterBorderColor"
+        label = "posterBorderColor",
     )
     return this
         .scale(scale)

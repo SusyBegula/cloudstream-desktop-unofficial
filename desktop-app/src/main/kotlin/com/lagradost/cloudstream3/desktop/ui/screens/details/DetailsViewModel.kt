@@ -1,7 +1,6 @@
 package com.lagradost.cloudstream3.desktop.ui.screens.details
 
 import com.lagradost.cloudstream3.*
-import com.lagradost.common.storage.WatchHistory
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -19,7 +18,7 @@ object GlobalDetailsCache {
             override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, LoadResponse>?): Boolean {
                 return size > 50
             }
-        }
+        },
     )
 
     suspend fun fetchRaw(provider: MainAPI, url: String): LoadResponse? {
@@ -33,7 +32,7 @@ object GlobalDetailsCache {
                 null
             }
         }
-        
+
         if (loaded != null) {
             cache[url] = loaded
         }
@@ -131,8 +130,8 @@ class DetailsViewModel(
     private val _errorMessage = MutableStateFlow<String?>(null)
     val errorMessage: StateFlow<String?> = _errorMessage.asStateFlow()
 
-    private val _activeLinkData = MutableStateFlow<Triple<MainAPI, String, WatchHistory>?>(null)
-    val activeLinkData: StateFlow<Triple<MainAPI, String, WatchHistory>?> = _activeLinkData.asStateFlow()
+    private val _activeLinkData = MutableStateFlow<LinksPanelRequest?>(null)
+    val activeLinkData: StateFlow<LinksPanelRequest?> = _activeLinkData.asStateFlow()
 
     private val _isPanelOpen = MutableStateFlow(false)
     val isPanelOpen: StateFlow<Boolean> = _isPanelOpen.asStateFlow()
@@ -161,7 +160,7 @@ class DetailsViewModel(
                 val rawData = GlobalDetailsCache.fetchRaw(provider, url)
                 _response.value = rawData
                 _isLoading.value = false
-                
+
                 if (rawData != null) {
                     viewModelScope.launch {
                         GlobalDetailsCache.enrich(rawData, url)
@@ -177,7 +176,7 @@ class DetailsViewModel(
         }
     }
 
-    fun openLinksPanel(data: Triple<MainAPI, String, WatchHistory>) {
+    fun openLinksPanel(data: LinksPanelRequest) {
         _activeLinkData.value = data
         _isPanelOpen.value = true
     }

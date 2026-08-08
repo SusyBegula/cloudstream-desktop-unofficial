@@ -18,7 +18,6 @@ import com.lagradost.cloudstream3.desktop.repo.DesktopRepositoryManager
 import com.lagradost.cloudstream3.desktop.ui.components.ExtensionCard
 import com.lagradost.cloudstream3.desktop.ui.components.FlagImage
 import com.lagradost.cloudstream3.desktop.ui.theme.AppearanceConfig
-import kotlinx.coroutines.launch
 
 @Composable
 fun BrowseTab(viewModel: ExtensionsViewModel, syncGeneration: Int) {
@@ -231,7 +230,7 @@ fun BrowseTab(viewModel: ExtensionsViewModel, syncGeneration: Int) {
                             isInstalling = false
                             installStatus = result
                         }
-                    }
+                    },
                 )
             }
         }

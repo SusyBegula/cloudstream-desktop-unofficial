@@ -193,4 +193,3 @@ fun BookmarkCard(bookmark: DesktopBookmark, onClick: () -> Unit, onDelete: () ->
         }
     }
 }
-

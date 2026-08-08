@@ -15,9 +15,6 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
-import androidx.compose.ui.window.Popup
-import java.text.SimpleDateFormat
-import java.util.Date
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -29,9 +26,12 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.Popup
 import coil3.compose.AsyncImage
 import com.lagradost.cloudstream3.MainAPI
 import com.lagradost.cloudstream3.desktop.ui.components.DesktopUi
+import java.text.SimpleDateFormat
+import java.util.Date
 // Haze removed for performance
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -310,7 +310,7 @@ fun HomeTopBar(
         Box(
             modifier = Modifier
                 .align(Alignment.CenterEnd)
-                .padding(end = 32.dp)
+                .padding(end = 32.dp),
         ) {
             IconButton(
                 onClick = {
@@ -322,12 +322,12 @@ fun HomeTopBar(
                 modifier = Modifier
                     .size(52.dp)
                     .background(DesktopUi.SurfaceElevated.copy(alpha = 0.85f), CircleShape)
-                    .clip(CircleShape)
+                    .clip(CircleShape),
             ) {
                 Icon(
                     imageVector = Icons.Default.Notifications,
                     contentDescription = "Updates",
-                    tint = if (hasUnreadUpdates) DesktopUi.Accent else DesktopUi.TextPrimary
+                    tint = if (hasUnreadUpdates) DesktopUi.Accent else DesktopUi.TextPrimary,
                 )
                 if (hasUnreadUpdates) {
                     Box(
@@ -335,7 +335,7 @@ fun HomeTopBar(
                             .align(Alignment.TopEnd)
                             .padding(8.dp)
                             .size(8.dp)
-                            .background(Color.Red, CircleShape)
+                            .background(Color.Red, CircleShape),
                     )
                 }
             }
@@ -344,14 +344,14 @@ fun HomeTopBar(
                 Popup(
                     alignment = Alignment.TopEnd,
                     offset = androidx.compose.ui.unit.IntOffset(0, 160),
-                    onDismissRequest = { isUpdatesDialogExpanded = false }
+                    onDismissRequest = { isUpdatesDialogExpanded = false },
                 ) {
                     Surface(
                         shape = RoundedCornerShape(16.dp),
                         color = DesktopUi.SurfaceElevated.copy(alpha = 0.95f),
                         border = BorderStroke(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f)),
                         modifier = Modifier.width(360.dp).heightIn(max = 500.dp),
-                        shadowElevation = 8.dp
+                        shadowElevation = 8.dp,
                     ) {
                         Column(modifier = Modifier.fillMaxWidth().padding(20.dp)) {
                             Text(
@@ -366,11 +366,11 @@ fun HomeTopBar(
                                 Text(
                                     "No plugin updates recorded recently.",
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    fontSize = 14.sp
+                                    fontSize = 14.sp,
                                 )
                             } else {
                                 androidx.compose.foundation.lazy.LazyColumn(
-                                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                                    verticalArrangement = Arrangement.spacedBy(12.dp),
                                 ) {
                                     items(updatesHistory.size) { i ->
                                         val update = updatesHistory[i]
@@ -379,7 +379,7 @@ fun HomeTopBar(
                                             AsyncImage(
                                                 model = update.iconUrl,
                                                 contentDescription = null,
-                                                modifier = Modifier.size(32.dp).clip(RoundedCornerShape(8.dp)).background(Color.White)
+                                                modifier = Modifier.size(32.dp).clip(RoundedCornerShape(8.dp)).background(Color.White),
                                             )
                                             Spacer(modifier = Modifier.width(12.dp))
                                             Column {
@@ -387,12 +387,12 @@ fun HomeTopBar(
                                                     update.pluginName,
                                                     color = MaterialTheme.colorScheme.onSurface,
                                                     fontWeight = FontWeight.SemiBold,
-                                                    fontSize = 14.sp
+                                                    fontSize = 14.sp,
                                                 )
                                                 Text(
                                                     "Updated to v${update.version} • $timeString",
                                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                    fontSize = 12.sp
+                                                    fontSize = 12.sp,
                                                 )
                                             }
                                         }
@@ -406,4 +406,3 @@ fun HomeTopBar(
         }
     }
 }
-

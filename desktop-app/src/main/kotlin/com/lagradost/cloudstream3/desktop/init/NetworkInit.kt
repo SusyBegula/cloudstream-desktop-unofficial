@@ -54,7 +54,11 @@ fun initNetwork() {
                                         instance = try {
                                             c.newInstance(name, url)
                                         } catch (e: Exception) {
-                                            try { c.newInstance(url, name) } catch (e2: Exception) { null }
+                                            try {
+                                                c.newInstance(url, name)
+                                            } catch (e2: Exception) {
+                                                null
+                                            }
                                         }
                                     }
 
