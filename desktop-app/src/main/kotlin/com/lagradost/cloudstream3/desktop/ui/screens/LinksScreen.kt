@@ -2,7 +2,9 @@ package com.lagradost.cloudstream3.desktop.ui.screens
 
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.hoverable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsHoveredAsState
@@ -22,6 +24,7 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.lagradost.cloudstream3.MainAPI
 import com.lagradost.cloudstream3.SubtitleFile
 import com.lagradost.cloudstream3.desktop.ui.components.DesktopUi
@@ -59,6 +62,24 @@ fun LinksModal(provider: MainAPI, dataUrl: String, history: WatchHistory, onClos
 
     var selectedQuality by remember { mutableStateOf<String?>(null) }
     var currentPlayingUrl by remember { mutableStateOf<String?>(null) }
+
+    val defaultStreamKey = remember(provider.name, history.showUrl) {
+        "default_stream_${provider.name}_${history.showUrl}"
+    }
+    var defaultStreamName by remember(defaultStreamKey, history.showUrl) {
+        mutableStateOf(DesktopDataStore.getKey<String>(defaultStreamKey))
+    }
+    var hasAutoPlayed by remember { mutableStateOf(false) }
+
+    val onToggleDefault: (ExtractorLink) -> Unit = { link ->
+        if (defaultStreamName.equals(link.name, ignoreCase = true)) {
+            defaultStreamName = null
+            DesktopDataStore.removeKey(defaultStreamKey)
+        } else {
+            defaultStreamName = link.name
+            DesktopDataStore.setKey(defaultStreamKey, link.name)
+        }
+    }
 
     val availableQualities = remember(links.size) { links.map { it.quality.toString() }.distinct().sorted() }
     val filteredLinks = remember(links.size, selectedQuality) {
@@ -165,6 +186,7 @@ fun LinksModal(provider: MainAPI, dataUrl: String, history: WatchHistory, onClos
                         if (result.isSuccess) {
                             statusText = "Playing: ${link.name}"
                             playerLaunchError = null
+                            onClose()
                         } else {
                             playerLaunchError = result.exceptionOrNull()?.message ?: "Failed to launch player"
                             statusText = "Could not start player."
@@ -176,7 +198,7 @@ fun LinksModal(provider: MainAPI, dataUrl: String, history: WatchHistory, onClos
                     val initialIndex = filteredLinks.indexOfFirst { it.url == link.url }.coerceAtLeast(0)
                     playVideo(
                         com.lagradost.cloudstream3.desktop.ui.VideoLaunchData(
-                            links = filteredLinks,
+                            links = if (filteredLinks.isNotEmpty()) filteredLinks else listOf(link),
                             initialIndex = initialIndex,
                             title = displayTitle,
                             subtitles = subtitles.filter { it.url.isNotBlank() },
@@ -194,8 +216,7 @@ fun LinksModal(provider: MainAPI, dataUrl: String, history: WatchHistory, onClos
                         ),
                     )
                     statusText = "Playing in embedded player: ${link.name}"
-                    // We don't set isLaunchingPlayer=false here because the embedded player is an overlay
-                    // and we want it to block interaction until it closes.
+                    onClose()
                 }
             }
         }
@@ -216,7 +237,12 @@ fun LinksModal(provider: MainAPI, dataUrl: String, history: WatchHistory, onClos
         links.clear()
         subtitles.clear()
         isScraping = true
-        statusText = "Finding streams for you..."
+        hasAutoPlayed = false
+        statusText = if (!defaultStreamName.isNullOrBlank()) {
+            "Searching for preferred stream '$defaultStreamName'..."
+        } else {
+            "Finding streams for you..."
+        }
         playerLaunchError = null
         currentPlayingUrl = null
 
@@ -229,14 +255,23 @@ fun LinksModal(provider: MainAPI, dataUrl: String, history: WatchHistory, onClos
                     callback = { link: ExtractorLink ->
                         coroutineScope.launch {
                             links.add(link)
-                            statusText = "Found ${links.size} stream${if (links.size == 1) "" else "s"}..."
+                            if (!hasAutoPlayed && !defaultStreamName.isNullOrBlank() && link.name.equals(defaultStreamName, ignoreCase = true)) {
+                                hasAutoPlayed = true
+                                playLink(link)
+                            } else {
+                                statusText = "Found ${links.size} stream${if (links.size == 1) "" else "s"}..."
+                            }
                         }
                     },
                 )
                 isScraping = false
-                statusText = when {
-                    links.isEmpty() -> "No streams found for this title."
-                    else -> "Ready — ${links.size} stream${if (links.size == 1) "" else "s"} available."
+                if (!hasAutoPlayed) {
+                    statusText = when {
+                        links.isEmpty() -> "No streams found for this title."
+                        !defaultStreamName.isNullOrBlank() && links.none { it.name.equals(defaultStreamName, ignoreCase = true) } ->
+                            "Preferred stream '$defaultStreamName' not available. Choose a stream below:"
+                        else -> "Ready — ${links.size} stream${if (links.size == 1) "" else "s"} available."
+                    }
                 }
             } catch (e: kotlinx.coroutines.CancellationException) {
                 isScraping = false
@@ -327,8 +362,11 @@ fun LinksModal(provider: MainAPI, dataUrl: String, history: WatchHistory, onClos
                         }
                     }
                     itemsIndexed(filteredLinks, key = { index, it -> "${it.name}-${it.url}-$index" }) { index, link ->
+                        val isDefault = !defaultStreamName.isNullOrBlank() && link.name.equals(defaultStreamName, ignoreCase = true)
                         StreamLinkCard(
                             link = link,
+                            isDefault = isDefault,
+                            onToggleDefault = { onToggleDefault(link) },
                             isBusy = isLaunchingPlayer && currentPlayingUrl != link.url,
                             onPlay = {
                                 playLink(link)
@@ -449,6 +487,8 @@ private fun PlayerSelector(selectedPlayer: String, onSelect: (String) -> Unit) {
 @Composable
 private fun StreamLinkCard(
     link: ExtractorLink,
+    isDefault: Boolean,
+    onToggleDefault: () -> Unit,
     isBusy: Boolean,
     onPlay: () -> Unit,
     onCopy: () -> Unit,
@@ -463,22 +503,40 @@ private fun StreamLinkCard(
             .scale(scale)
             .hoverable(interaction),
         shape = RoundedCornerShape(12.dp),
-        color = if (hovered) DesktopUi.SurfaceElevated else DesktopUi.SurfaceCard,
+        color = if (isDefault) DesktopUi.AccentSoft.copy(alpha = 0.22f) else if (hovered) DesktopUi.SurfaceElevated else DesktopUi.SurfaceCard,
+        border = if (isDefault) BorderStroke(1.5.dp, DesktopUi.Accent.copy(alpha = 0.75f)) else null,
         tonalElevation = if (hovered) 6.dp else 2.dp,
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp),
+                .padding(horizontal = 16.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    link.name,
-                    fontWeight = FontWeight.SemiBold,
-                    style = MaterialTheme.typography.titleMedium,
-                    color = DesktopUi.TextPrimary,
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        link.name,
+                        fontWeight = FontWeight.SemiBold,
+                        style = MaterialTheme.typography.titleMedium,
+                        color = DesktopUi.TextPrimary,
+                    )
+                    if (isDefault) {
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Surface(
+                            shape = RoundedCornerShape(4.dp),
+                            color = DesktopUi.Accent,
+                        ) {
+                            Text(
+                                "DEFAULT",
+                                color = Color.White,
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                            )
+                        }
+                    }
+                }
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
                     buildString {
@@ -498,6 +556,33 @@ private fun StreamLinkCard(
                     style = MaterialTheme.typography.bodySmall,
                 )
             }
+
+            // Checkbox to set / unset as default for this show
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .clickable { onToggleDefault() }
+                    .padding(horizontal = 6.dp, vertical = 4.dp),
+            ) {
+                Checkbox(
+                    checked = isDefault,
+                    onCheckedChange = { onToggleDefault() },
+                    colors = CheckboxDefaults.colors(
+                        checkedColor = DesktopUi.Accent,
+                        uncheckedColor = DesktopUi.TextMuted,
+                    ),
+                )
+                Spacer(modifier = Modifier.width(2.dp))
+                Text(
+                    "Default",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (isDefault) DesktopUi.Accent else DesktopUi.TextMuted,
+                    fontWeight = if (isDefault) FontWeight.Bold else FontWeight.Normal,
+                )
+            }
+
+            Spacer(modifier = Modifier.width(6.dp))
+
             OutlinedButton(
                 onClick = onCopy,
                 enabled = !isBusy,
