@@ -66,11 +66,22 @@ fun EpisodeCard(ep: Episode, isLatest: Boolean, history: WatchHistory?, provider
             }
 
             Column(modifier = Modifier.weight(1f)) {
-                val epNumber = ep.episode?.let { "E$it " } ?: ""
-                val title = ep.name ?: "Episode ${ep.episode ?: "?"}"
+                val epNum = ep.episode
+                val rawName = ep.name?.trim() ?: ""
+                val title = when {
+                    rawName.isBlank() -> "Episode ${epNum ?: "?"}"
+                    epNum != null && (
+                        rawName.equals("E$epNum", ignoreCase = true) ||
+                        rawName.equals("Episode $epNum", ignoreCase = true) ||
+                        rawName.equals("S${ep.season}E$epNum", ignoreCase = true) ||
+                        rawName.matches(Regex("""(?i)^S\d+E$epNum$"""))
+                    ) -> "Episode $epNum"
+                    epNum != null -> "E$epNum - $rawName"
+                    else -> rawName
+                }
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        text = "$epNumber- $title",
+                        text = title,
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         maxLines = 1,

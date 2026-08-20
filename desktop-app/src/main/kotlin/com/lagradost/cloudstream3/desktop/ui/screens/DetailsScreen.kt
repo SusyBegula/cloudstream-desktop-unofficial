@@ -63,14 +63,14 @@ fun ComposeDetailsScreen(navController: NavController, provider: MainAPI, url: S
             // 1. Details Content
             if (isLoading) {
                 if (fakeData != null) {
-                    DetailsContent(navController, provider, fakeData!!, enrichmentTrigger, isLoading = true, onPlay = viewModel::openLinksPanel)
+                    DetailsContent(navController, provider, fakeData!!, enrichmentTrigger, isLoading = true, onPlay = viewModel::openLinksPanel, onEnrichEpisodes = viewModel::enrichVisibleEpisodes)
                 } else {
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         CircularProgressIndicator()
                     }
                 }
             } else if (response != null) {
-                DetailsContent(navController, provider, response!!, enrichmentTrigger, isLoading = false, onPlay = viewModel::openLinksPanel)
+                DetailsContent(navController, provider, response!!, enrichmentTrigger, isLoading = false, onPlay = viewModel::openLinksPanel, onEnrichEpisodes = viewModel::enrichVisibleEpisodes)
             } else {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -136,7 +136,15 @@ fun ComposeDetailsScreen(navController: NavController, provider: MainAPI, url: S
 }
 
 @Composable
-fun DetailsContent(navController: NavController, provider: MainAPI, data: LoadResponse, enrichmentTrigger: Int, isLoading: Boolean = false, onPlay: (LinksPanelRequest) -> Unit) {
+fun DetailsContent(
+    navController: NavController,
+    provider: MainAPI,
+    data: LoadResponse,
+    enrichmentTrigger: Int,
+    isLoading: Boolean = false,
+    onPlay: (LinksPanelRequest) -> Unit,
+    onEnrichEpisodes: (List<Episode>) -> Unit = {},
+) {
     val scrollState = androidx.compose.foundation.lazy.rememberLazyListState()
     val hazeState = remember { HazeState() }
 
@@ -164,7 +172,7 @@ fun DetailsContent(navController: NavController, provider: MainAPI, data: LoadRe
         com.lagradost.common.storage.DesktopDataStore.getKey<Int>("last_season_${provider.name}_${data.url}")
     }
 
-    val seasons = remember(data) {
+    val seasons = remember(data, enrichmentTrigger) {
         when (data) {
             is TvSeriesLoadResponse -> {
                 normalizeTvSeriesEpisodes(data)
@@ -209,7 +217,7 @@ fun DetailsContent(navController: NavController, provider: MainAPI, data: LoadRe
     val coroutineScope = rememberCoroutineScope()
     val pageSize = 6
 
-    val allEpisodes = remember(data, selectedSeason, selectedDub, isSortAscending, episodeSearchQuery, seasons) {
+    val allEpisodes = remember(data, selectedSeason, selectedDub, isSortAscending, episodeSearchQuery, seasons, enrichmentTrigger) {
         val rawList = when (data) {
             is TvSeriesLoadResponse -> data.episodes
             is AnimeLoadResponse -> selectedDub?.let { data.episodes[it] } ?: emptyList()
@@ -245,13 +253,19 @@ fun DetailsContent(navController: NavController, provider: MainAPI, data: LoadRe
         mutableStateOf(initialPage)
     }
 
-    val pagedEpisodes = remember(allEpisodes, currentPage, totalPages) {
+    val pagedEpisodes = remember(allEpisodes, currentPage, totalPages, enrichmentTrigger) {
         if (allEpisodes.isEmpty()) emptyList()
         else {
             val page = currentPage.coerceIn(1, maxOf(1, totalPages))
             val start = ((page - 1) * pageSize).coerceIn(0, allEpisodes.size)
             val end = (start + pageSize).coerceIn(0, allEpisodes.size)
             allEpisodes.subList(start, end)
+        }
+    }
+
+    LaunchedEffect(pagedEpisodes, data.url) {
+        if (pagedEpisodes.isNotEmpty()) {
+            onEnrichEpisodes(pagedEpisodes)
         }
     }
 
@@ -552,7 +566,10 @@ fun DetailsContent(navController: NavController, provider: MainAPI, data: LoadRe
                             }
                         }
                     } else {
-                        items(pagedEpisodes) { ep ->
+                        items(
+                            items = pagedEpisodes,
+                            key = { "${it.data}-${it.name}-${it.posterUrl}-$enrichmentTrigger" },
+                        ) { ep ->
                             val isLatest = latestHistory != null && latestHistory.episodeId == ep.data
                             val history = showHistory.values.find { it.episodeId == ep.data }
                             Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
