@@ -11,6 +11,7 @@ object PlayerConfig {
     const val PREF_YTDL_FORMAT = "player_ytdl_format"
     const val PREF_AUTO_PLAY = "player_auto_play"
     const val PREF_AUTO_PLAY_TIMEOUT = "player_auto_play_timeout"
+    const val PREF_SPEED = "player_speed"
 
     fun applyMpvSettings(handle: Pointer, lib: MpvLibrary) {
         // Hardware Acceleration (Default: auto-safe)
@@ -32,6 +33,10 @@ object PlayerConfig {
         // YTDL Format / Quality Selection
         val ytdlFormat = DesktopDataStore.getKey<String>(PREF_YTDL_FORMAT) ?: "bestvideo[height<=?1080]+bestaudio/best"
         lib.mpv_set_option_string(handle, "ytdl-format", ytdlFormat)
+
+        // Playback Speed (Default: 1.0), persisted from the last session
+        val speed = DesktopDataStore.getKey<String>(PREF_SPEED) ?: "1.0"
+        lib.mpv_set_option_string(handle, "speed", speed)
 
         // Verbose Logging for Dev Console
         lib.mpv_set_option_string(handle, "msg-level", "all=v")

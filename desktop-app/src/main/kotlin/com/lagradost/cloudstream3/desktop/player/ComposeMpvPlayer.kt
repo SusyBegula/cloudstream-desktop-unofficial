@@ -29,12 +29,19 @@ fun ComposeMpvPlayer(
     var mpvHandle by remember { mutableStateOf<com.sun.jna.Pointer?>(null) }
     var hasEverPlayed by remember { mutableStateOf(false) }
     var lastFullscreenState by remember { mutableStateOf(false) }
+    var lastSpeed by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(mpvHandle) {
         val h = mpvHandle
         if (h != null) {
             val startTime = System.currentTimeMillis()
             while (true) {
+                // Persist playback speed whenever the user changes it (e.g. via mpv's [ ] keys)
+                val speedStr = MpvLibrary.INSTANCE.mpv_get_property_string(h, "speed")
+                if (speedStr != null && speedStr != lastSpeed) {
+                    lastSpeed = speedStr
+                    com.lagradost.common.storage.DesktopDataStore.setKey(PlayerConfig.PREF_SPEED, speedStr)
+                }
                 // Check if playback has started and track position
                 val posStr = MpvLibrary.INSTANCE.mpv_get_property_string(h, "time-pos")
                 val pos = posStr?.toDoubleOrNull()
