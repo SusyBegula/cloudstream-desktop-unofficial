@@ -11,6 +11,8 @@ object PlayerConfig {
     const val PREF_YTDL_FORMAT = "player_ytdl_format"
     const val PREF_AUTO_PLAY = "player_auto_play"
     const val PREF_AUTO_PLAY_TIMEOUT = "player_auto_play_timeout"
+    const val PREF_AUTO_PLAY_NEXT_EPISODE = "player_auto_play_next_episode"
+    const val PREF_AUTO_PLAY_NEXT_EPISODE_SECONDS = "player_auto_play_next_episode_seconds"
     const val PREF_SPEED = "player_speed"
 
     fun applyMpvSettings(handle: Pointer, lib: MpvLibrary) {

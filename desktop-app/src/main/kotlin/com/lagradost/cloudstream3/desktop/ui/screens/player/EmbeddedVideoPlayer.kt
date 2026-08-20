@@ -28,6 +28,9 @@ fun EmbeddedVideoPlayer(
     var isLoading by remember { mutableStateOf(true) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var isFinished by remember { mutableStateOf(false) }
+    var replayTrigger by remember { mutableStateOf(0) }
+    var currentStartPositionMs by remember { mutableStateOf(launchData.startPositionMs) }
+
     var lastPositionSec by remember { mutableStateOf(0L) }
     var lastDurationSec by remember { mutableStateOf(0L) }
     var lastSavedPositionSec by remember { mutableStateOf(0L) }
@@ -53,7 +56,7 @@ fun EmbeddedVideoPlayer(
             .background(Color.Black),
     ) {
         // --- Top AppBar for Back Button ---
-        if (!isFullscreen) {
+        if (!isFullscreen && !isFinished) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -89,19 +92,16 @@ fun EmbeddedVideoPlayer(
             contentAlignment = Alignment.Center,
         ) {
             if (errorMessage == null && !isFinished) {
-                // We no longer attempt to hide the AWT Canvas while loading (via size 0 or offset)
-                // because hiding heavyweight Windows HWNDs in Compose causes permanent clipping glitches (black screens).
-                // Instead, it will just display a safe, clean black background until the first video frame renders!
                 Box(
                     modifier = Modifier.fillMaxSize(),
                 ) {
-                    key(currentLinkIndex) {
+                    key(currentLinkIndex, replayTrigger) {
                         ComposeMpvPlayer(
                             modifier = if (isLoading) Modifier.size(1.dp) else Modifier.fillMaxSize(),
                             link = launchData.links[currentLinkIndex],
                             title = launchData.title,
                             subtitles = launchData.subtitles,
-                            startPositionMs = launchData.startPositionMs,
+                            startPositionMs = currentStartPositionMs,
                             onPlaybackReady = {
                                 isLoading = false
                             },
@@ -164,7 +164,7 @@ fun EmbeddedVideoPlayer(
             }
 
             // --- Loading State ---
-            if (isLoading && errorMessage == null) {
+            if (isLoading && errorMessage == null && !isFinished) {
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
@@ -217,52 +217,32 @@ fun EmbeddedVideoPlayer(
                 }
             }
 
-            // --- Finished State ---
+            // --- Next Episode / Finished Screen Overlay ---
             if (isFinished) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(Color.Black.copy(alpha = 0.8f)),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center,
-                ) {
-                    Text(
-                        text = "Video Ended",
-                        color = MaterialTheme.colorScheme.onSurface,
-                        style = MaterialTheme.typography.headlineMedium,
-                        fontWeight = FontWeight.Bold,
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = "Please close the player to select the next episode.",
-                        color = Color.LightGray,
-                        style = MaterialTheme.typography.bodyLarge,
-                    )
-                    Spacer(modifier = Modifier.height(24.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        OutlinedButton(onClick = {
-                            if (isFullscreen) {
-                                windowState?.placement = WindowPlacement.Floating
-                            }
-                            launchData.onClosed?.invoke()
-                            onClose()
-                        }) {
-                            Text("Close Player")
+                NextEpisodeOverlay(
+                    launchData = launchData,
+                    onPlayNext = {
+                        if (isFullscreen) {
+                            windowState.placement = WindowPlacement.Floating
                         }
-                        if (launchData.onPlayNext != null) {
-                            Button(onClick = {
-                                if (isFullscreen) {
-                                    windowState?.placement = WindowPlacement.Floating
-                                }
-                                launchData.onClosed?.invoke()
-                                launchData.onPlayNext.invoke()
-                                onClose()
-                            }) {
-                                Text("Play Next Episode")
-                            }
+                        launchData.onClosed?.invoke()
+                        launchData.nextEpisode?.onPlay?.invoke() ?: launchData.onPlayNext?.invoke()
+                        onClose()
+                    },
+                    onReplay = {
+                        currentStartPositionMs = 0L
+                        isFinished = false
+                        isLoading = true
+                        replayTrigger++
+                    },
+                    onClose = {
+                        if (isFullscreen) {
+                            windowState.placement = WindowPlacement.Floating
                         }
-                    }
-                }
+                        launchData.onClosed?.invoke()
+                        onClose()
+                    },
+                )
             }
         }
     }
