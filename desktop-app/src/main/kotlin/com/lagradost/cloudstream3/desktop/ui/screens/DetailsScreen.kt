@@ -31,12 +31,14 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.desktop.ui.components.DesktopUi
 import com.lagradost.cloudstream3.desktop.ui.navigation.NavController
 import com.lagradost.cloudstream3.desktop.ui.screens.details.*
 import com.lagradost.player.impl.PlayerLinkHandler
 import dev.chrisbanes.haze.HazeState
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -221,6 +223,54 @@ fun DetailsContent(navController: NavController, provider: MainAPI, data: LoadRe
     var episodeSearchQuery by remember(data.url) { mutableStateOf("") }
     var isSearchActive by remember(data.url) { mutableStateOf(false) }
     val searchFocusRequester = remember { FocusRequester() }
+    val coroutineScope = rememberCoroutineScope()
+    val pageSize = 6
+
+    val allEpisodes = remember(data, selectedSeason, selectedDub, isSortAscending, episodeSearchQuery, seasons) {
+        val rawList = when (data) {
+            is TvSeriesLoadResponse -> data.episodes
+            is AnimeLoadResponse -> selectedDub?.let { data.episodes[it] } ?: emptyList()
+            else -> emptyList()
+        }
+        rawList
+            .filter { it.season == selectedSeason || (it.season == null && selectedSeason == 1) || seasons.isEmpty() }
+            .let { list ->
+                if (isSortAscending) {
+                    list.sortedBy { it.episode ?: Int.MAX_VALUE }
+                } else {
+                    list.sortedByDescending { it.episode ?: Int.MIN_VALUE }
+                }
+            }
+            .let { list ->
+                if (episodeSearchQuery.isBlank()) {
+                    list
+                } else {
+                    val q = episodeSearchQuery.trim()
+                    list.filter { ep ->
+                        ep.name?.contains(q, ignoreCase = true) == true ||
+                            ep.episode?.toString()?.contains(q) == true
+                    }
+                }
+            }
+    }
+
+    val totalPages = (allEpisodes.size + pageSize - 1) / pageSize
+
+    var currentPage by remember(selectedSeason, selectedDub, episodeSearchQuery, data.url) {
+        val resumeIdx = allEpisodes.indexOfFirst { it.data == latestHistory?.episodeId }
+        val initialPage = if (resumeIdx >= 0) (resumeIdx / pageSize) + 1 else 1
+        mutableStateOf(initialPage)
+    }
+
+    val pagedEpisodes = remember(allEpisodes, currentPage, totalPages) {
+        if (allEpisodes.isEmpty()) emptyList()
+        else {
+            val page = currentPage.coerceIn(1, maxOf(1, totalPages))
+            val start = ((page - 1) * pageSize).coerceIn(0, allEpisodes.size)
+            val end = (start + pageSize).coerceIn(0, allEpisodes.size)
+            allEpisodes.subList(start, end)
+        }
+    }
 
     Box(modifier = Modifier.fillMaxSize()) {
         LazyColumn(state = scrollState, modifier = Modifier.fillMaxSize()) {
@@ -499,29 +549,8 @@ fun DetailsContent(navController: NavController, provider: MainAPI, data: LoadRe
                     }
                 }
 
-                if (data is TvSeriesLoadResponse) {
-                    val filteredEpisodes = data.episodes
-                        .filter { it.season == selectedSeason || (it.season == null && selectedSeason == 1) }
-                        .let { list ->
-                            if (isSortAscending) {
-                                list.sortedBy { it.episode ?: Int.MAX_VALUE }
-                            } else {
-                                list.sortedByDescending { it.episode ?: Int.MIN_VALUE }
-                            }
-                        }
-                        .let { list ->
-                            if (episodeSearchQuery.isBlank()) {
-                                list
-                            } else {
-                                list.filter { ep ->
-                                    val q = episodeSearchQuery.trim()
-                                    ep.name?.contains(q, ignoreCase = true) == true ||
-                                        ep.episode?.toString()?.contains(q) == true
-                                }
-                            }
-                        }
-
-                    if (filteredEpisodes.isEmpty()) {
+                if (data is TvSeriesLoadResponse || data is AnimeLoadResponse) {
+                    if (allEpisodes.isEmpty()) {
                         item {
                             Box(modifier = Modifier.fillMaxWidth().padding(vertical = 48.dp), contentAlignment = Alignment.Center) {
                                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -534,58 +563,33 @@ fun DetailsContent(navController: NavController, provider: MainAPI, data: LoadRe
                             }
                         }
                     } else {
-                        items(filteredEpisodes) { ep ->
+                        items(pagedEpisodes) { ep ->
                             val isLatest = latestHistory != null && latestHistory.episodeId == ep.data
                             val history = showHistory.values.find { it.episodeId == ep.data }
                             Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
                                 Box(modifier = Modifier.widthIn(max = 1000.dp).padding(horizontal = 16.dp)) {
                                     EpisodeCard(ep, isLatest, history, provider, data, onPlay)
-                                }
-                            }
-                        }
-                    }
-                } else if (data is AnimeLoadResponse) {
-                    val allDubEpisodes = (selectedDub?.let { data.episodes[it] } ?: emptyList())
-                    val filteredEpisodes = allDubEpisodes
-                        .filter { it.season == selectedSeason || (it.season == null && selectedSeason == 1) || seasons.isEmpty() }
-                        .let { list ->
-                            if (isSortAscending) {
-                                list.sortedBy { it.episode ?: Int.MAX_VALUE }
-                            } else {
-                                list.sortedByDescending { it.episode ?: Int.MIN_VALUE }
-                            }
-                        }
-                        .let { list ->
-                            if (episodeSearchQuery.isBlank()) {
-                                list
-                            } else {
-                                list.filter { ep ->
-                                    val q = episodeSearchQuery.trim()
-                                    ep.name?.contains(q, ignoreCase = true) == true ||
-                                        ep.episode?.toString()?.contains(q) == true
                                 }
                             }
                         }
 
-                    if (filteredEpisodes.isEmpty()) {
-                        item {
-                            Box(modifier = Modifier.fillMaxWidth().padding(vertical = 48.dp), contentAlignment = Alignment.Center) {
-                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Icon(Icons.Default.Info, contentDescription = null, modifier = Modifier.size(48.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f))
-                                    Spacer(modifier = Modifier.height(16.dp))
-                                    Text("Coming Soon", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
-                                    Spacer(modifier = Modifier.height(8.dp))
-                                    Text("Episodes are not available yet. Please check back later.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                }
-                            }
-                        }
-                    } else {
-                        items(filteredEpisodes) { ep ->
-                            val isLatest = latestHistory != null && latestHistory.episodeId == ep.data
-                            val history = showHistory.values.find { it.episodeId == ep.data }
-                            Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
-                                Box(modifier = Modifier.widthIn(max = 1000.dp).padding(horizontal = 16.dp)) {
-                                    EpisodeCard(ep, isLatest, history, provider, data, onPlay)
+                        if (totalPages > 1) {
+                            item {
+                                Box(modifier = Modifier.fillMaxWidth().padding(top = 24.dp, bottom = 8.dp), contentAlignment = Alignment.Center) {
+                                    Box(modifier = Modifier.widthIn(max = 1000.dp).padding(horizontal = 16.dp)) {
+                                        PaginationControls(
+                                            currentPage = currentPage.coerceIn(1, totalPages),
+                                            totalPages = totalPages,
+                                            totalItems = allEpisodes.size,
+                                            pageSize = pageSize,
+                                            onPageChange = { page ->
+                                                currentPage = page
+                                                coroutineScope.launch {
+                                                    scrollState.animateScrollToItem(1)
+                                                }
+                                            },
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -765,6 +769,139 @@ private fun EpisodeToolbar(
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurface,
                 )
+            }
+        }
+    }
+}
+
+@Composable
+fun PaginationControls(
+    currentPage: Int,
+    totalPages: Int,
+    totalItems: Int,
+    pageSize: Int,
+    onPageChange: (Int) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    if (totalPages <= 1) return
+
+    val startItem = ((currentPage - 1) * pageSize) + 1
+    val endItem = minOf(currentPage * pageSize, totalItems)
+
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Text(
+            text = "Showing $startItem–$endItem of $totalItems episodes",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(bottom = 12.dp),
+        )
+
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            // Previous Button
+            FilledTonalButton(
+                onClick = { onPageChange(currentPage - 1) },
+                enabled = currentPage > 1,
+                shape = RoundedCornerShape(8.dp),
+                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp),
+                colors = ButtonDefaults.filledTonalButtonColors(
+                    containerColor = DesktopUi.SurfaceElevated,
+                    contentColor = DesktopUi.TextPrimary,
+                    disabledContainerColor = DesktopUi.SurfaceElevated.copy(alpha = 0.4f),
+                    disabledContentColor = DesktopUi.TextMuted.copy(alpha = 0.4f),
+                ),
+            ) {
+                Text("‹ Prev", fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+            }
+
+            // Page numbers
+            val pagesToShow = remember(currentPage, totalPages) {
+                val pages = mutableListOf<Int?>()
+                if (totalPages <= 7) {
+                    for (i in 1..totalPages) pages.add(i)
+                } else {
+                    pages.add(1)
+                    if (currentPage > 4) {
+                        pages.add(null) // ellipsis
+                    }
+                    val start = maxOf(2, currentPage - 1)
+                    val end = minOf(totalPages - 1, currentPage + 1)
+                    for (i in start..end) {
+                        pages.add(i)
+                    }
+                    if (currentPage < totalPages - 3) {
+                        pages.add(null) // ellipsis
+                    }
+                    pages.add(totalPages)
+                }
+                pages
+            }
+
+            pagesToShow.forEach { page ->
+                if (page == null) {
+                    Text(
+                        text = "...",
+                        color = DesktopUi.TextMuted,
+                        modifier = Modifier.padding(horizontal = 4.dp),
+                        fontWeight = FontWeight.Bold,
+                    )
+                } else {
+                    val isSelected = page == currentPage
+                    if (isSelected) {
+                        Button(
+                            onClick = { },
+                            shape = RoundedCornerShape(8.dp),
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = DesktopUi.Accent,
+                                contentColor = Color.White,
+                            ),
+                        ) {
+                            Text(
+                                text = "$page",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 13.sp,
+                            )
+                        }
+                    } else {
+                        FilledTonalButton(
+                            onClick = { onPageChange(page) },
+                            shape = RoundedCornerShape(8.dp),
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                            colors = ButtonDefaults.filledTonalButtonColors(
+                                containerColor = DesktopUi.SurfaceElevated,
+                                contentColor = DesktopUi.TextPrimary,
+                            ),
+                        ) {
+                            Text(
+                                text = "$page",
+                                fontWeight = FontWeight.Normal,
+                                fontSize = 13.sp,
+                            )
+                        }
+                    }
+                }
+            }
+
+            // Next Button
+            FilledTonalButton(
+                onClick = { onPageChange(currentPage + 1) },
+                enabled = currentPage < totalPages,
+                shape = RoundedCornerShape(8.dp),
+                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp),
+                colors = ButtonDefaults.filledTonalButtonColors(
+                    containerColor = DesktopUi.SurfaceElevated,
+                    contentColor = DesktopUi.TextPrimary,
+                    disabledContainerColor = DesktopUi.SurfaceElevated.copy(alpha = 0.4f),
+                    disabledContentColor = DesktopUi.TextMuted.copy(alpha = 0.4f),
+                ),
+            ) {
+                Text("Next ›", fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
             }
         }
     }
