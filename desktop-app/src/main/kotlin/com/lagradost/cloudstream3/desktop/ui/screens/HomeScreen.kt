@@ -11,8 +11,6 @@ import com.lagradost.cloudstream3.desktop.ui.navigation.NavController
 import com.lagradost.cloudstream3.desktop.ui.navigation.Screen
 import com.lagradost.cloudstream3.desktop.ui.screens.details.GlobalDetailsCache
 import com.lagradost.cloudstream3.desktop.ui.screens.home.*
-import com.lagradost.common.storage.DesktopDataStore
-import kotlinx.coroutines.flow.map
 // haze imports removed
 
 @Composable
@@ -32,14 +30,6 @@ fun ComposeHomeScreen(
     val historyList by viewModel.historyList.collectAsState()
     val mergedPluginIcons by viewModel.mergedPluginIcons.collectAsState()
     val errorSnapshot by viewModel.errorSnapshot.collectAsState()
-
-    val hasUnreadUpdates by DesktopDataStore.pluginUpdatesFlow
-        .map { DesktopDataStore.hasUnreadUpdates() }
-        .collectAsState(initial = DesktopDataStore.hasUnreadUpdates())
-
-    val updatesHistory by DesktopDataStore.pluginUpdatesFlow
-        .map { DesktopDataStore.getUpdatesHistory() }
-        .collectAsState(initial = DesktopDataStore.getUpdatesHistory())
 
     LaunchedEffect(historyList) {
         val topHistory = historyList.take(3)
@@ -179,8 +169,5 @@ fun ComposeHomeScreen(
             viewModel.searchResultsGrouped.value = null
         },
         mergedPluginIcons = mergedPluginIcons,
-        hasUnreadUpdates = hasUnreadUpdates,
-        updatesHistory = updatesHistory,
-        onMarkUpdatesRead = { DesktopDataStore.setUnreadUpdates(false) },
     )
 }

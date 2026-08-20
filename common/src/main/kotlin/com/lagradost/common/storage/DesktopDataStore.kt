@@ -47,6 +47,20 @@ data class PluginUpdateRecord(
     val timestamp: Long = System.currentTimeMillis()
 )
 
+data class DownloadedItemRecord(
+    val id: String,
+    val showName: String,
+    val showUrl: String,
+    val episodeId: String?,
+    val episodeTitle: String,
+    val season: Int?,
+    val episode: Int?,
+    val posterUrl: String?,
+    val localFilePath: String,
+    val totalBytes: Long,
+    val downloadDate: Long = System.currentTimeMillis(),
+)
+
 object DesktopDataStore {
     @PublishedApi internal val mapper: ObjectMapper =
         jacksonObjectMapper()
@@ -281,5 +295,44 @@ object DesktopDataStore {
     fun setUnreadUpdates(hasUnread: Boolean) {
         setKey(UNREAD_UPDATES_KEY, hasUnread)
         pluginUpdatesFlow.value++
+    }
+
+    val downloadUpdates = MutableStateFlow(0)
+    private const val DOWNLOADS_KEY = "offline_downloads_v1"
+
+    fun getAllDownloads(): List<DownloadedItemRecord> {
+        val json = cache[DOWNLOADS_KEY] ?: return emptyList()
+        return try {
+            mapper.readValue(json, object : TypeReference<List<DownloadedItemRecord>>() {})
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
+    fun saveDownload(download: DownloadedItemRecord) {
+        val current = getAllDownloads().toMutableList()
+        current.removeAll { it.id == download.id || it.localFilePath == download.localFilePath }
+        current.add(download)
+        setKey(DOWNLOADS_KEY, current)
+        downloadUpdates.value++
+    }
+
+    fun removeDownload(id: String) {
+        val current = getAllDownloads().toMutableList()
+        val item = current.find { it.id == id }
+        if (item != null) {
+            try {
+                File(item.localFilePath).delete()
+            } catch (_: Exception) {}
+            current.removeAll { it.id == id }
+            setKey(DOWNLOADS_KEY, current)
+            downloadUpdates.value++
+        }
+    }
+
+    fun getDownloadedEpisode(showUrl: String, episodeId: String?): DownloadedItemRecord? {
+        return getAllDownloads().find {
+            it.showUrl == showUrl && it.episodeId == episodeId && File(it.localFilePath).exists()
+        }
     }
 }

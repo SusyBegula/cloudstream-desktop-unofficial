@@ -219,6 +219,27 @@ object DesktopRepositoryManager {
         return plugins
     }
 
+    fun getPluginsForRepository(repoUrl: String): List<SitePlugin> {
+        val repo = repoCache[repoUrl] ?: return emptyList()
+        val list = mutableListOf<SitePlugin>()
+        for (listUrl in repo.pluginLists) {
+            pluginsCache[listUrl]?.let { list.addAll(it) }
+        }
+        return list.distinctBy { it.internalName }
+    }
+
+    suspend fun fetchPluginsForRepository(repoUrl: String): List<SitePlugin> = withContext(Dispatchers.IO) {
+        val cached = getPluginsForRepository(repoUrl)
+        if (cached.isNotEmpty()) return@withContext cached
+        val repo = repoCache[repoUrl] ?: fetchRepository(repoUrl)?.also { repoCache[repoUrl] = it } ?: return@withContext emptyList()
+        val list = mutableListOf<SitePlugin>()
+        for (listUrl in repo.pluginLists) {
+            val plugins = pluginsCache[listUrl] ?: fetchPlugins(listUrl).also { pluginsCache[listUrl] = it }
+            list.addAll(plugins)
+        }
+        list.distinctBy { it.internalName }
+    }
+
     fun readPluginManifest(jarFile: File): Map<String, Any>? {
         try {
             java.util.zip.ZipFile(jarFile).use { zip ->

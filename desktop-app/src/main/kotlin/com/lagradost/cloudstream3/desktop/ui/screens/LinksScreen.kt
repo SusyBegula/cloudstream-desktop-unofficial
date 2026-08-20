@@ -2,7 +2,9 @@ package com.lagradost.cloudstream3.desktop.ui.screens
 
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.hoverable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsHoveredAsState
@@ -22,8 +24,10 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.lagradost.cloudstream3.MainAPI
 import com.lagradost.cloudstream3.SubtitleFile
+import com.lagradost.cloudstream3.desktop.download.FfmpegDownloadManager
 import com.lagradost.cloudstream3.desktop.ui.components.DesktopUi
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.common.storage.DesktopDataStore
@@ -37,7 +41,27 @@ private val vlcPlayer = VlcPlayer()
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun LinksSidePanel(provider: MainAPI, dataUrl: String, history: WatchHistory, onClose: () -> Unit, onPlayNext: (() -> Unit)? = null) {
+fun LinksSidePanel(
+    provider: MainAPI,
+    dataUrl: String,
+    history: WatchHistory,
+    onClose: () -> Unit,
+    onPlayNext: (() -> Unit)? = null,
+    autoPlay: Boolean = true,
+) {
+    LinksModal(provider, dataUrl, history, onClose, onPlayNext, autoPlay)
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun LinksModal(
+    provider: MainAPI,
+    dataUrl: String,
+    history: WatchHistory,
+    onClose: () -> Unit,
+    onPlayNext: (() -> Unit)? = null,
+    autoPlay: Boolean = true,
+) {
     val links = remember { mutableStateListOf<ExtractorLink>() }
     val subtitles = remember { mutableStateListOf<SubtitleFile>() }
     var statusText by remember { mutableStateOf("Finding streams for you...") }
@@ -53,6 +77,24 @@ fun LinksSidePanel(provider: MainAPI, dataUrl: String, history: WatchHistory, on
 
     var selectedQuality by remember { mutableStateOf<String?>(null) }
     var currentPlayingUrl by remember { mutableStateOf<String?>(null) }
+
+    val defaultStreamKey = remember(provider.name, history.showUrl) {
+        "default_stream_${provider.name}_${history.showUrl}"
+    }
+    var defaultStreamName by remember(defaultStreamKey, history.showUrl) {
+        mutableStateOf(DesktopDataStore.getKey<String>(defaultStreamKey))
+    }
+    var hasAutoPlayed by remember { mutableStateOf(false) }
+
+    val onToggleDefault: (ExtractorLink) -> Unit = { link ->
+        if (defaultStreamName.equals(link.name, ignoreCase = true)) {
+            defaultStreamName = null
+            DesktopDataStore.removeKey(defaultStreamKey)
+        } else {
+            defaultStreamName = link.name
+            DesktopDataStore.setKey(defaultStreamKey, link.name)
+        }
+    }
 
     val availableQualities = remember(links.size) { links.map { it.quality.toString() }.distinct().sorted() }
     val filteredLinks = remember(links.size, selectedQuality) {
@@ -159,6 +201,7 @@ fun LinksSidePanel(provider: MainAPI, dataUrl: String, history: WatchHistory, on
                         if (result.isSuccess) {
                             statusText = "Playing: ${link.name}"
                             playerLaunchError = null
+                            onClose()
                         } else {
                             playerLaunchError = result.exceptionOrNull()?.message ?: "Failed to launch player"
                             statusText = "Could not start player."
@@ -170,7 +213,7 @@ fun LinksSidePanel(provider: MainAPI, dataUrl: String, history: WatchHistory, on
                     val initialIndex = filteredLinks.indexOfFirst { it.url == link.url }.coerceAtLeast(0)
                     playVideo(
                         com.lagradost.cloudstream3.desktop.ui.VideoLaunchData(
-                            links = filteredLinks,
+                            links = if (filteredLinks.isNotEmpty()) filteredLinks else listOf(link),
                             initialIndex = initialIndex,
                             title = displayTitle,
                             subtitles = subtitles.filter { it.url.isNotBlank() },
@@ -188,8 +231,7 @@ fun LinksSidePanel(provider: MainAPI, dataUrl: String, history: WatchHistory, on
                         ),
                     )
                     statusText = "Playing in embedded player: ${link.name}"
-                    // We don't set isLaunchingPlayer=false here because the embedded player is an overlay
-                    // and we want it to block interaction until it closes.
+                    onClose()
                 }
             }
         }
@@ -206,11 +248,16 @@ fun LinksSidePanel(provider: MainAPI, dataUrl: String, history: WatchHistory, on
         }
     }
 
-    LaunchedEffect(dataUrl) {
+    LaunchedEffect(dataUrl, autoPlay) {
         links.clear()
         subtitles.clear()
         isScraping = true
-        statusText = "Finding streams for you..."
+        hasAutoPlayed = false
+        statusText = if (autoPlay && !defaultStreamName.isNullOrBlank()) {
+            "Searching for preferred stream '$defaultStreamName'..."
+        } else {
+            "Finding streams for you..."
+        }
         playerLaunchError = null
         currentPlayingUrl = null
 
@@ -223,14 +270,23 @@ fun LinksSidePanel(provider: MainAPI, dataUrl: String, history: WatchHistory, on
                     callback = { link: ExtractorLink ->
                         coroutineScope.launch {
                             links.add(link)
-                            statusText = "Found ${links.size} stream${if (links.size == 1) "" else "s"}..."
+                            if (autoPlay && !hasAutoPlayed && !defaultStreamName.isNullOrBlank() && link.name.equals(defaultStreamName, ignoreCase = true)) {
+                                hasAutoPlayed = true
+                                playLink(link)
+                            } else {
+                                statusText = "Found ${links.size} stream${if (links.size == 1) "" else "s"}..."
+                            }
                         }
                     },
                 )
                 isScraping = false
-                statusText = when {
-                    links.isEmpty() -> "No streams found for this title."
-                    else -> "Ready — ${links.size} stream${if (links.size == 1) "" else "s"} available."
+                if (!hasAutoPlayed) {
+                    statusText = when {
+                        links.isEmpty() -> "No streams found for this title."
+                        !defaultStreamName.isNullOrBlank() && links.none { it.name.equals(defaultStreamName, ignoreCase = true) } ->
+                            "Preferred stream '$defaultStreamName' not available. Choose a stream below:"
+                        else -> "Ready — ${links.size} stream${if (links.size == 1) "" else "s"} available."
+                    }
                 }
             } catch (e: kotlinx.coroutines.CancellationException) {
                 isScraping = false
@@ -261,9 +317,19 @@ fun LinksSidePanel(provider: MainAPI, dataUrl: String, history: WatchHistory, on
                             color = DesktopUi.TextPrimary,
                         )
                         Text(
-                            history.showName,
+                            displayTitle,
                             style = MaterialTheme.typography.bodySmall,
                             color = DesktopUi.TextMuted,
+                        )
+                    }
+                    IconButton(
+                        onClick = onClose,
+                        modifier = Modifier.size(36.dp),
+                    ) {
+                        Icon(
+                            Icons.Default.Close,
+                            contentDescription = "Close",
+                            tint = DesktopUi.TextPrimary,
                         )
                     }
                 }
@@ -292,12 +358,73 @@ fun LinksSidePanel(provider: MainAPI, dataUrl: String, history: WatchHistory, on
                     )
                 }
 
+                val downloadedItem = remember(history.showUrl, history.episodeId, DesktopDataStore.downloadUpdates.collectAsState().value) {
+                    FfmpegDownloadManager.getDownloadedRecord(history.showUrl, history.episodeId)
+                }
+                val downloadsList = FfmpegDownloadManager.downloadsFlow.collectAsState().value
+                val currentDownloading = downloadsList.find { it.showUrl == history.showUrl && it.episodeId == history.episodeId }
+
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
-                    if (!isScraping && filteredLinks.isEmpty()) {
+                    if (downloadedItem != null) {
+                        item {
+                            Surface(
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(12.dp),
+                                color = Color(0xFF1B382B),
+                                border = BorderStroke(1.dp, Color(0xFF4CAF50).copy(alpha = 0.6f)),
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            "Downloaded Offline File",
+                                            fontWeight = FontWeight.Bold,
+                                            style = MaterialTheme.typography.titleMedium,
+                                            color = Color(0xFF81C784),
+                                        )
+                                        Spacer(modifier = Modifier.height(2.dp))
+                                        val mb = downloadedItem.totalBytes / (1024 * 1024)
+                                        Text(
+                                            "Saved on disk · $mb MB · Instant Offline Playback",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = DesktopUi.TextMuted,
+                                        )
+                                    }
+                                    Button(
+                                        onClick = {
+                                            coroutineScope.launch {
+                                                val localLink = com.lagradost.cloudstream3.utils.newExtractorLink(
+                                                    source = "Offline File",
+                                                    name = "Local Download",
+                                                    url = downloadedItem.localFilePath,
+                                                )
+                                                playLink(localLink)
+                                            }
+                                        },
+                                        shape = RoundedCornerShape(10.dp),
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = Color(0xFF4CAF50),
+                                            contentColor = Color.Black,
+                                        ),
+                                    ) {
+                                        Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text("Play Offline", fontWeight = FontWeight.Bold)
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    if (!isScraping && filteredLinks.isEmpty() && downloadedItem == null) {
                         item {
                             Box(modifier = Modifier.fillMaxWidth().padding(vertical = 48.dp), contentAlignment = Alignment.Center) {
                                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -311,11 +438,30 @@ fun LinksSidePanel(provider: MainAPI, dataUrl: String, history: WatchHistory, on
                         }
                     }
                     itemsIndexed(filteredLinks, key = { index, it -> "${it.name}-${it.url}-$index" }) { index, link ->
+                        val isDefault = !defaultStreamName.isNullOrBlank() && link.name.equals(defaultStreamName, ignoreCase = true)
+                        val isThisDownloading = currentDownloading != null && currentDownloading.streamUrl == link.url
                         StreamLinkCard(
                             link = link,
+                            isDefault = isDefault,
+                            onToggleDefault = { onToggleDefault(link) },
                             isBusy = isLaunchingPlayer && currentPlayingUrl != link.url,
+                            isDownloading = isThisDownloading,
+                            downloadSpeed = if (isThisDownloading) currentDownloading.speed else "",
                             onPlay = {
                                 playLink(link)
+                            },
+                            onDownload = {
+                                FfmpegDownloadManager.startDownload(
+                                    showName = history.showName,
+                                    showUrl = history.showUrl,
+                                    episodeId = history.episodeId,
+                                    episodeTitle = displayTitle,
+                                    season = history.season,
+                                    episode = history.episode,
+                                    posterUrl = history.posterUrl,
+                                    link = link,
+                                )
+                                statusText = "Downloading ${link.name} in background..."
                             },
                             onCopy = {
                                 if (link.url.isNotBlank()) {
@@ -397,41 +543,49 @@ private fun StreamStatusCard(
 
 @Composable
 private fun PlayerSelector(selectedPlayer: String, onSelect: (String) -> Unit) {
-    Row(
+    Column(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 20.dp, vertical = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text("Player", style = MaterialTheme.typography.labelLarge, color = DesktopUi.TextMuted)
-        Spacer(modifier = Modifier.width(16.dp))
-        FilterChip(
-            selected = selectedPlayer == "mpv",
-            onClick = { onSelect("mpv") },
-            label = { Text("MPV") },
-            colors = FilterChipDefaults.filterChipColors(
-                selectedContainerColor = DesktopUi.AccentSoft,
-                selectedLabelColor = DesktopUi.Accent,
-            ),
-        )
-        Spacer(modifier = Modifier.width(8.dp))
-        FilterChip(
-            selected = selectedPlayer == "vlc",
-            onClick = { onSelect("vlc") },
-            label = { Text("VLC") },
-            colors = FilterChipDefaults.filterChipColors(
-                selectedContainerColor = DesktopUi.AccentSoft,
-                selectedLabelColor = DesktopUi.Accent,
-            ),
-        )
+        Text("Player", style = MaterialTheme.typography.labelMedium, color = DesktopUi.TextMuted)
+        Spacer(modifier = Modifier.height(6.dp))
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            FilterChip(
+                selected = selectedPlayer == "mpv",
+                onClick = { onSelect("mpv") },
+                label = { Text("MPV") },
+                colors = FilterChipDefaults.filterChipColors(
+                    selectedContainerColor = DesktopUi.AccentSoft,
+                    selectedLabelColor = DesktopUi.Accent,
+                ),
+            )
+            FilterChip(
+                selected = selectedPlayer == "vlc",
+                onClick = { onSelect("vlc") },
+                label = { Text("VLC") },
+                colors = FilterChipDefaults.filterChipColors(
+                    selectedContainerColor = DesktopUi.AccentSoft,
+                    selectedLabelColor = DesktopUi.Accent,
+                ),
+            )
+        }
     }
 }
 
 @Composable
 private fun StreamLinkCard(
     link: ExtractorLink,
+    isDefault: Boolean,
+    onToggleDefault: () -> Unit,
     isBusy: Boolean,
+    isDownloading: Boolean = false,
+    downloadSpeed: String = "",
     onPlay: () -> Unit,
+    onDownload: () -> Unit,
     onCopy: () -> Unit,
 ) {
     val interaction = remember { MutableInteractionSource() }
@@ -444,22 +598,40 @@ private fun StreamLinkCard(
             .scale(scale)
             .hoverable(interaction),
         shape = RoundedCornerShape(12.dp),
-        color = if (hovered) DesktopUi.SurfaceElevated else DesktopUi.SurfaceCard,
+        color = if (isDefault) DesktopUi.AccentSoft.copy(alpha = 0.22f) else if (hovered) DesktopUi.SurfaceElevated else DesktopUi.SurfaceCard,
+        border = if (isDefault) BorderStroke(1.5.dp, DesktopUi.Accent.copy(alpha = 0.75f)) else null,
         tonalElevation = if (hovered) 6.dp else 2.dp,
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp),
+                .padding(horizontal = 16.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    link.name,
-                    fontWeight = FontWeight.SemiBold,
-                    style = MaterialTheme.typography.titleMedium,
-                    color = DesktopUi.TextPrimary,
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        link.name,
+                        fontWeight = FontWeight.SemiBold,
+                        style = MaterialTheme.typography.titleMedium,
+                        color = DesktopUi.TextPrimary,
+                    )
+                    if (isDefault) {
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Surface(
+                            shape = RoundedCornerShape(4.dp),
+                            color = DesktopUi.Accent,
+                        ) {
+                            Text(
+                                "DEFAULT",
+                                color = Color.White,
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                            )
+                        }
+                    }
+                }
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
                     buildString {
@@ -467,18 +639,64 @@ private fun StreamLinkCard(
                         append(" · ")
                         append(
                             if (link.isM3u8) {
-                                "HLS (Best for Streaming)"
+                                "HLS Stream"
                             } else if (link.isDash) {
-                                "DASH (Best for Streaming)"
+                                "DASH Stream"
                             } else {
-                                "Direct (Best for Download)"
+                                "Direct MP4"
                             },
                         )
+                        if (isDownloading) {
+                            append(" · ⬇ Downloading")
+                            if (downloadSpeed.isNotBlank()) {
+                                append(" ($downloadSpeed)")
+                            }
+                        }
                     },
-                    color = DesktopUi.Accent,
+                    color = if (isDownloading) Color(0xFF64B5F6) else DesktopUi.Accent,
                     style = MaterialTheme.typography.bodySmall,
                 )
             }
+
+            // Checkbox to set / unset as default for this show
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .clickable { onToggleDefault() }
+                    .padding(horizontal = 6.dp, vertical = 4.dp),
+            ) {
+                Checkbox(
+                    checked = isDefault,
+                    onCheckedChange = { onToggleDefault() },
+                    colors = CheckboxDefaults.colors(
+                        checkedColor = DesktopUi.Accent,
+                        uncheckedColor = DesktopUi.TextMuted,
+                    ),
+                )
+                Spacer(modifier = Modifier.width(2.dp))
+                Text(
+                    "Default",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (isDefault) DesktopUi.Accent else DesktopUi.TextMuted,
+                    fontWeight = if (isDefault) FontWeight.Bold else FontWeight.Normal,
+                )
+            }
+
+            Spacer(modifier = Modifier.width(6.dp))
+
+            OutlinedButton(
+                onClick = onDownload,
+                enabled = !isBusy && !isDownloading,
+                shape = RoundedCornerShape(10.dp),
+                colors = ButtonDefaults.outlinedButtonColors(
+                    contentColor = if (isDownloading) Color(0xFF64B5F6) else DesktopUi.TextPrimary,
+                ),
+            ) {
+                Text(if (isDownloading) "⬇ Downloading..." else "⬇ Download")
+            }
+
+            Spacer(modifier = Modifier.width(6.dp))
+
             OutlinedButton(
                 onClick = onCopy,
                 enabled = !isBusy,

@@ -5,6 +5,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -24,6 +26,12 @@ import com.lagradost.player.impl.PlayerLinkHandler
 
 @Composable
 fun EpisodeCard(ep: Episode, isLatest: Boolean, history: WatchHistory?, provider: MainAPI, data: LoadResponse, onPlay: (LinksPanelRequest) -> Unit) {
+    val isDownloaded = remember(data.url, ep.data, DesktopDataStore.downloadUpdates.collectAsState().value) {
+        com.lagradost.cloudstream3.desktop.download.FfmpegDownloadManager.isEpisodeDownloaded(data.url, ep.data)
+    }
+    val downloads = com.lagradost.cloudstream3.desktop.download.FfmpegDownloadManager.downloadsFlow.collectAsState().value
+    val downloading = downloads.find { it.showUrl == data.url && it.episodeId == ep.data && it.status == com.lagradost.cloudstream3.desktop.download.DownloadStatus.Downloading }
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -66,11 +74,22 @@ fun EpisodeCard(ep: Episode, isLatest: Boolean, history: WatchHistory?, provider
             }
 
             Column(modifier = Modifier.weight(1f)) {
-                val epNumber = ep.episode?.let { "E$it " } ?: ""
-                val title = ep.name ?: "Episode ${ep.episode ?: "?"}"
+                val epNum = ep.episode
+                val rawName = ep.name?.trim() ?: ""
+                val title = when {
+                    rawName.isBlank() -> "Episode ${epNum ?: "?"}"
+                    epNum != null && (
+                        rawName.equals("E$epNum", ignoreCase = true) ||
+                        rawName.equals("Episode $epNum", ignoreCase = true) ||
+                        rawName.equals("S${ep.season}E$epNum", ignoreCase = true) ||
+                        rawName.matches(Regex("""(?i)^S\d+E$epNum$"""))
+                    ) -> "Episode $epNum"
+                    epNum != null -> "E$epNum - $rawName"
+                    else -> rawName
+                }
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        text = "$epNumber- $title",
+                        text = title,
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         maxLines = 1,
@@ -86,6 +105,36 @@ fun EpisodeCard(ep: Episode, isLatest: Boolean, history: WatchHistory?, provider
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
+                    }
+
+                    if (isDownloaded) {
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Surface(
+                            shape = RoundedCornerShape(4.dp),
+                            color = Color(0xFF1B382B),
+                        ) {
+                            Text(
+                                "✓ Downloaded",
+                                color = Color(0xFF81C784),
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                            )
+                        }
+                    } else if (downloading != null) {
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Surface(
+                            shape = RoundedCornerShape(4.dp),
+                            color = Color(0xFF1C2D42),
+                        ) {
+                            Text(
+                                "⬇ Downloading...",
+                                color = Color(0xFF64B5F6),
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                            )
+                        }
                     }
                 }
                 ep.description?.let {
@@ -106,6 +155,36 @@ fun EpisodeCard(ep: Episode, isLatest: Boolean, history: WatchHistory?, provider
                     )
                 }
             }
+
+            // Download Action Button directly on Episode Card
+            IconButton(
+                onClick = {
+                    navigateToPlay(provider, data, ep, onPlay, autoPlay = false)
+                },
+                modifier = Modifier.padding(start = 8.dp),
+            ) {
+                if (isDownloaded) {
+                    Icon(
+                        Icons.Default.CheckCircle,
+                        contentDescription = "Downloaded",
+                        tint = Color(0xFF81C784),
+                        modifier = Modifier.size(24.dp),
+                    )
+                } else if (downloading != null) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(20.dp),
+                        strokeWidth = 2.dp,
+                        color = Color(0xFF64B5F6),
+                    )
+                } else {
+                    Icon(
+                        Icons.Default.Download,
+                        contentDescription = "Download Episode",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
+                        modifier = Modifier.size(22.dp),
+                    )
+                }
+            }
         }
     }
 }
@@ -115,6 +194,7 @@ data class LinksPanelRequest(
     val dataUrl: String,
     val history: WatchHistory,
     val onPlayNext: (() -> Unit)? = null,
+    val autoPlay: Boolean = true,
 )
 
 private fun resolveNextEpisode(data: LoadResponse, ep: Episode): Episode? = when (data) {
@@ -135,14 +215,29 @@ private fun resolveNextEpisode(data: LoadResponse, ep: Episode): Episode? = when
     is AnimeLoadResponse -> {
         val dubEps = data.episodes.values
             .find { list -> list.any { it.data == ep.data } }
-            ?.sortedBy { it.episode ?: Int.MAX_VALUE }
-        val currentIdx = dubEps?.indexOfFirst { it.data == ep.data } ?: -1
-        if (dubEps != null && currentIdx >= 0 && currentIdx + 1 < dubEps.size) dubEps[currentIdx + 1] else null
+        val currentSeason = ep.season
+        val sortedSeasonEps = (dubEps ?: emptyList())
+            .filter { it.season == currentSeason || (it.season == null && currentSeason == null) }
+            .sortedBy { it.episode ?: Int.MAX_VALUE }
+        val currentIdx = sortedSeasonEps.indexOfFirst { it.data == ep.data }
+        val nextEpSameSeason = if (currentIdx >= 0 && currentIdx + 1 < sortedSeasonEps.size) sortedSeasonEps[currentIdx + 1] else null
+        nextEpSameSeason ?: run {
+            val nextSeason = (currentSeason ?: 0) + 1
+            (dubEps ?: emptyList())
+                .filter { it.season == nextSeason }
+                .minByOrNull { it.episode ?: Int.MAX_VALUE }
+        }
     }
     else -> null
 }
 
-fun navigateToPlay(provider: MainAPI, data: LoadResponse, ep: Episode, onPlay: (LinksPanelRequest) -> Unit) {
+fun navigateToPlay(
+    provider: MainAPI,
+    data: LoadResponse,
+    ep: Episode,
+    onPlay: (LinksPanelRequest) -> Unit,
+    autoPlay: Boolean = true,
+) {
     val parentId = DesktopDataStore.watchHistoryId(
         apiName = provider.name,
         showUrl = data.url,
@@ -168,13 +263,13 @@ fun navigateToPlay(provider: MainAPI, data: LoadResponse, ep: Episode, onPlay: (
     if (patchedData.startsWith("{") && patchedData.endsWith("}")) {
         if (!patchedData.contains("\"title\"")) {
             val titleStr = data.name.replace("\"", "\\\"")
-            patchedData = patchedData.replaceFirst("{", "{\"title\":\"\$titleStr\",")
+            patchedData = patchedData.replaceFirst("{", "{\"title\":\"$titleStr\",")
         }
         if (!patchedData.contains("\"tvtype\"")) {
             patchedData = patchedData.replaceFirst("{", "{\"tvtype\":\"\",")
         }
     }
     val nextEp = resolveNextEpisode(data, ep)
-    val onPlayNext: (() -> Unit)? = nextEp?.let { ne -> { navigateToPlay(provider, data, ne, onPlay) } }
-    onPlay(LinksPanelRequest(provider, patchedData, history, onPlayNext))
+    val onPlayNext: (() -> Unit)? = nextEp?.let { ne -> { navigateToPlay(provider, data, ne, onPlay, autoPlay = true) } }
+    onPlay(LinksPanelRequest(provider, patchedData, history, onPlayNext, autoPlay))
 }

@@ -48,3 +48,6 @@ test_*.kt
 test_*.kts
 test-repos/
 .gemini/
+
+.claude
+.serena

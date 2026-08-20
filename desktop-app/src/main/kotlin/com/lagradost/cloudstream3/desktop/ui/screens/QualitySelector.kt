@@ -1,8 +1,6 @@
 package com.lagradost.cloudstream3.desktop.ui.screens
 
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -10,30 +8,31 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.lagradost.cloudstream3.desktop.ui.components.DesktopUi
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun QualitySelector(availableQualities: List<String>, selectedQuality: String?, onSelect: (String?) -> Unit) {
-    Row(
+    Column(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 20.dp, vertical = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text("Quality", style = MaterialTheme.typography.labelLarge, color = DesktopUi.TextMuted)
-        Spacer(modifier = Modifier.width(16.dp))
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            item {
-                FilterChip(
-                    selected = selectedQuality == null,
-                    onClick = { onSelect(null) },
-                    label = { Text("All") },
-                    colors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = DesktopUi.AccentSoft,
-                        selectedLabelColor = DesktopUi.Accent,
-                    ),
-                )
-            }
-            items(availableQualities) { q ->
+        Text("Quality", style = MaterialTheme.typography.labelMedium, color = DesktopUi.TextMuted)
+        Spacer(modifier = Modifier.height(6.dp))
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            FilterChip(
+                selected = selectedQuality == null,
+                onClick = { onSelect(null) },
+                label = { Text("All") },
+                colors = FilterChipDefaults.filterChipColors(
+                    selectedContainerColor = DesktopUi.AccentSoft,
+                    selectedLabelColor = DesktopUi.Accent,
+                ),
+            )
+            availableQualities.forEach { q ->
                 FilterChip(
                     selected = selectedQuality == q,
                     onClick = { onSelect(q) },
@@ -47,3 +46,4 @@ fun QualitySelector(availableQualities: List<String>, selectedQuality: String?, 
         }
     }
 }
+

@@ -10,6 +10,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -26,6 +27,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
+import coil3.compose.SubcomposeAsyncImage
+import com.lagradost.cloudstream3.desktop.ui.components.DesktopUi
 import com.lagradost.cloudstream3.LoadResponse
 import com.lagradost.cloudstream3.MainAPI
 import com.lagradost.cloudstream3.fixUrlNull
@@ -240,11 +243,9 @@ fun DetailsMetadata(provider: MainAPI, data: LoadResponse, hazeState: HazeState)
                 ) {
                     items(data.actors!!) { actor ->
                         Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(110.dp)) {
-                            AsyncImage(
-                                model = provider.fixUrlNull(actor.actor.image),
-                                contentDescription = actor.actor.name,
-                                contentScale = ContentScale.Crop,
-                                modifier = Modifier.size(96.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant),
+                            CastAvatar(
+                                name = actor.actor.name,
+                                imageUrl = provider.fixUrlNull(actor.actor.image),
                             )
                             Spacer(modifier = Modifier.height(12.dp))
                             Text(actor.actor.name, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis, color = MaterialTheme.colorScheme.onSurface)
@@ -261,6 +262,71 @@ fun DetailsMetadata(provider: MainAPI, data: LoadResponse, hazeState: HazeState)
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+fun CastAvatar(
+    name: String,
+    imageUrl: String?,
+    modifier: Modifier = Modifier,
+) {
+    Box(
+        modifier = modifier
+            .size(96.dp)
+            .clip(CircleShape)
+            .background(
+                Brush.verticalGradient(
+                    listOf(
+                        Color(0xFF282A36),
+                        Color(0xFF181A22),
+                    )
+                )
+            ),
+        contentAlignment = Alignment.Center,
+    ) {
+        // Sleek dark-themed profile silhouette
+        Icon(
+            imageVector = Icons.Default.Person,
+            contentDescription = name,
+            tint = Color.White.copy(alpha = 0.28f),
+            modifier = Modifier.size(52.dp),
+        )
+
+        if (!imageUrl.isNullOrBlank()) {
+            SubcomposeAsyncImage(
+                model = imageUrl,
+                contentDescription = name,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize(),
+                loading = {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Person,
+                            contentDescription = name,
+                            tint = Color.White.copy(alpha = 0.28f),
+                            modifier = Modifier.size(52.dp),
+                        )
+                    }
+                },
+                error = {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Person,
+                            contentDescription = name,
+                            tint = Color.White.copy(alpha = 0.28f),
+                            modifier = Modifier.size(52.dp),
+                        )
+                    }
+                },
+            )
         }
     }
 }

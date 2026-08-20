@@ -65,4 +65,16 @@ object PlatformPaths {
     val logsDir: File by lazy {
         File(appDataDir, "logs").also { it.mkdirs() }
     }
+
+    /** Directory for downloaded media files. */
+    val downloadsDir: File by lazy {
+        val userHome = System.getProperty("user.home")
+        val videosFolder = File(userHome, "Videos")
+        val target = if (videosFolder.exists() || videosFolder.mkdirs()) {
+            File(videosFolder, "CloudStream")
+        } else {
+            File(appDataDir, "Downloads")
+        }
+        target.also { it.mkdirs() }
+    }
 }

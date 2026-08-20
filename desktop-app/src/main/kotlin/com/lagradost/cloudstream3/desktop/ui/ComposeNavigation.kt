@@ -10,6 +10,7 @@ import androidx.compose.runtime.setValue
 import com.lagradost.cloudstream3.desktop.ui.navigation.NavController
 import com.lagradost.cloudstream3.desktop.ui.navigation.Screen
 import com.lagradost.cloudstream3.desktop.ui.screens.ComposeDetailsScreen
+import com.lagradost.cloudstream3.desktop.ui.screens.ComposeDownloadsScreen
 import com.lagradost.cloudstream3.desktop.ui.screens.ComposeExtensionScreen
 import com.lagradost.cloudstream3.desktop.ui.screens.ComposeHomeScreen
 import com.lagradost.cloudstream3.desktop.ui.screens.ComposeLibraryScreen
@@ -86,6 +87,13 @@ fun CloudstreamApp() {
                                 onErrorLogs = { showErrorsDialog = true },
                             ) {
                                 ComposeLibraryScreen(navController)
+                            }
+                            is Screen.Downloads -> DesktopAppShell(
+                                navController = navController,
+                                title = "Downloads",
+                                onErrorLogs = { showErrorsDialog = true },
+                            ) {
+                                ComposeDownloadsScreen(navController)
                             }
                             is Screen.Settings -> DesktopAppShell(
                                 navController = navController,
