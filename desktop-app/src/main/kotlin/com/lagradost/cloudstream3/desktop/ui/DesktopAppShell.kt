@@ -19,7 +19,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.lagradost.cloudstream3.desktop.repo.DesktopRepositoryManager
 import com.lagradost.cloudstream3.desktop.ui.components.LocalDesktopTheme
 import com.lagradost.cloudstream3.desktop.ui.navigation.NavController
@@ -164,6 +166,9 @@ private fun NavigationDock(
 
             // Main nav items, centered vertically
             Spacer(Modifier.weight(1f))
+            val activeDownloads by com.lagradost.cloudstream3.desktop.download.FfmpegDownloadManager.downloadsFlow.collectAsState()
+            val activeCount = activeDownloads.count { it.status == com.lagradost.cloudstream3.desktop.download.DownloadStatus.Downloading }
+
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -171,6 +176,13 @@ private fun NavigationDock(
             ) {
                 DockItem(icon = Icons.Default.Home, label = "Board", selected = current is Screen.Home, onClick = { onNavigate(Screen.Home) })
                 DockItem(icon = Icons.Default.FavoriteBorder, label = "Library", selected = current is Screen.Library, onClick = { onNavigate(Screen.Library) })
+                DockItem(
+                    icon = Icons.Default.Download,
+                    label = "Downloads",
+                    selected = current is Screen.Downloads,
+                    badge = activeCount.takeIf { it > 0 }?.toString(),
+                    onClick = { onNavigate(Screen.Downloads) },
+                )
                 DockItem(
                     icon = Icons.Default.Extension,
                     label = "Extensions",
@@ -237,6 +249,26 @@ private fun DockItem(
         contentAlignment = Alignment.Center,
     ) {
         Icon(icon, contentDescription = label, tint = iconTint, modifier = Modifier.size(24.dp))
+        if (badge != null) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(top = 4.dp, end = 4.dp)
+                    .size(16.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.primary),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    text = badge,
+                    color = Color.White,
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Bold,
+                    ),
+                )
+            }
+        }
     }
 }
 

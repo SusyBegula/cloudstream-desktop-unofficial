@@ -18,7 +18,9 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.PlayArrow
@@ -118,13 +120,14 @@ fun ComposeDetailsScreen(navController: NavController, provider: MainAPI, url: S
                             color = DesktopUi.SurfaceCard,
                             border = BorderStroke(1.dp, Color.White.copy(alpha = 0.08f)),
                         ) {
-                            activeLinkData?.let { (linkProvider, linkUrl, linkHistory, linkOnPlayNext) ->
+                            activeLinkData?.let { (linkProvider, linkUrl, linkHistory, linkOnPlayNext, linkAutoPlay) ->
                                 LinksModal(
                                     provider = linkProvider,
                                     dataUrl = linkUrl,
                                     history = linkHistory,
                                     onClose = { viewModel.closeLinksPanel() },
                                     onPlayNext = linkOnPlayNext,
+                                    autoPlay = linkAutoPlay,
                                 )
                             }
                         }
@@ -302,24 +305,59 @@ fun DetailsContent(
                                         )
                                         Spacer(modifier = Modifier.height(12.dp))
                                     }
-                                    Button(
-                                        onClick = {
-                                            val url = if (data is TorrentLoadResponse) (data.torrent ?: data.magnet ?: "") else (data as MovieLoadResponse).dataUrl
-                                            val ep = provider.newEpisode(url) {
-                                                name = data.name
-                                                posterUrl = data.posterUrl
-                                            }
-                                            navigateToPlay(provider, data, ep, onPlay)
-                                        },
+                                    val movieUrl = if (data is TorrentLoadResponse) (data.torrent ?: data.magnet ?: "") else (data as MovieLoadResponse).dataUrl
+                                    val movieEp = remember(movieUrl) {
+                                        provider.newEpisode(movieUrl) {
+                                            name = data.name
+                                            posterUrl = data.posterUrl
+                                        }
+                                    }
+                                    val isMovieDownloaded = remember(data.url, movieEp.data, com.lagradost.common.storage.DesktopDataStore.downloadUpdates.collectAsState().value) {
+                                        com.lagradost.cloudstream3.desktop.download.FfmpegDownloadManager.isEpisodeDownloaded(data.url, movieEp.data)
+                                    }
+                                    val movieDownloads = com.lagradost.cloudstream3.desktop.download.FfmpegDownloadManager.downloadsFlow.collectAsState().value
+                                    val movieDownloading = movieDownloads.find { it.showUrl == data.url && it.episodeId == movieEp.data && it.status == com.lagradost.cloudstream3.desktop.download.DownloadStatus.Downloading }
+
+                                    Row(
                                         modifier = Modifier.fillMaxWidth().height(56.dp),
-                                        shape = RoundedCornerShape(8.dp),
+                                        horizontalArrangement = Arrangement.spacedBy(12.dp),
                                     ) {
-                                        Icon(Icons.Default.PlayArrow, contentDescription = "Play")
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                        val canResume = latestHistory != null &&
-                                            PlayerLinkHandler.resumeStartSeconds(latestHistory.position, latestHistory.duration) > 0
-                                        val typeName = if (data is TorrentLoadResponse) "Torrent" else "Movie"
-                                        Text(if (canResume) "Resume $typeName" else "Play $typeName", fontWeight = FontWeight.Bold)
+                                        Button(
+                                            onClick = {
+                                                navigateToPlay(provider, data, movieEp, onPlay)
+                                            },
+                                            modifier = Modifier.weight(1f).fillMaxHeight(),
+                                            shape = RoundedCornerShape(8.dp),
+                                        ) {
+                                            Icon(Icons.Default.PlayArrow, contentDescription = "Play")
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            val canResume = latestHistory != null &&
+                                                PlayerLinkHandler.resumeStartSeconds(latestHistory.position, latestHistory.duration) > 0
+                                            val typeName = if (data is TorrentLoadResponse) "Torrent" else "Movie"
+                                            Text(if (canResume) "Resume $typeName" else "Play $typeName", fontWeight = FontWeight.Bold)
+                                        }
+
+                                        OutlinedButton(
+                                            onClick = {
+                                                navigateToPlay(provider, data, movieEp, onPlay, autoPlay = false)
+                                            },
+                                            modifier = Modifier.fillMaxHeight(),
+                                            shape = RoundedCornerShape(8.dp),
+                                        ) {
+                                            if (isMovieDownloaded) {
+                                                Icon(Icons.Default.Check, contentDescription = null, tint = Color(0xFF81C784))
+                                                Spacer(modifier = Modifier.width(6.dp))
+                                                Text("Downloaded", color = Color(0xFF81C784), fontWeight = FontWeight.Bold)
+                                            } else if (movieDownloading != null) {
+                                                CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp, color = Color(0xFF64B5F6))
+                                                Spacer(modifier = Modifier.width(6.dp))
+                                                Text(if (movieDownloading.speed.isNotBlank()) movieDownloading.speed else "Downloading...", color = Color(0xFF64B5F6), fontWeight = FontWeight.Bold)
+                                            } else {
+                                                Icon(Icons.Default.Download, contentDescription = null)
+                                                Spacer(modifier = Modifier.width(6.dp))
+                                                Text("Download", fontWeight = FontWeight.Bold)
+                                            }
+                                        }
                                     }
                                     Spacer(modifier = Modifier.height(32.dp))
                                 }

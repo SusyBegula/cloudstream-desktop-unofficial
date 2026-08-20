@@ -7,6 +7,7 @@ sealed class Screen {
     object Home : Screen()
     object Extensions : Screen()
     object Library : Screen()
+    object Downloads : Screen()
     object Settings : Screen()
     data class Details(val provider: MainAPI, val url: String, val preloadedName: String? = null, val preloadedPoster: String? = null, val preloadedBg: String? = null) : Screen()
     data class CategoryGrid(val provider: MainAPI, val title: String, val items: List<SearchResponse>) : Screen()
