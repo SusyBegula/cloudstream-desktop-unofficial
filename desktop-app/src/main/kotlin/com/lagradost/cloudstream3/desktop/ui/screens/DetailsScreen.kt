@@ -425,7 +425,7 @@ fun DetailsContent(navController: NavController, provider: MainAPI, data: LoadRe
                                         Spacer(modifier = Modifier.height(20.dp))
                                     }
 
-                                    // Episode Toolbar (Season Dropdown, Search, Sort)
+                                    // Episode Toolbar (Season Dropdown, Search, Sort, Page Switcher)
                                     EpisodeToolbar(
                                         provider = provider,
                                         data = data,
@@ -439,6 +439,9 @@ fun DetailsContent(navController: NavController, provider: MainAPI, data: LoadRe
                                         dubStatuses = emptyList(),
                                         selectedDub = null,
                                         onSelectDub = {},
+                                        currentPage = currentPage.coerceIn(1, maxOf(1, totalPages)),
+                                        totalPages = totalPages,
+                                        onPageChange = { currentPage = it },
                                         episodeSearchQuery = episodeSearchQuery,
                                         onSearchQueryChange = { episodeSearchQuery = it },
                                         isSearchActive = isSearchActive,
@@ -517,7 +520,7 @@ fun DetailsContent(navController: NavController, provider: MainAPI, data: LoadRe
                                         Spacer(modifier = Modifier.height(20.dp))
                                     }
 
-                                    // Episode Toolbar (Dub Dropdown, Season Dropdown, Search, Sort)
+                                    // Episode Toolbar (Dub Dropdown, Season Dropdown, Search, Sort, Page Switcher)
                                     EpisodeToolbar(
                                         provider = provider,
                                         data = data,
@@ -534,6 +537,9 @@ fun DetailsContent(navController: NavController, provider: MainAPI, data: LoadRe
                                             selectedDub = dub
                                             episodeSearchQuery = ""
                                         },
+                                        currentPage = currentPage.coerceIn(1, maxOf(1, totalPages)),
+                                        totalPages = totalPages,
+                                        onPageChange = { currentPage = it },
                                         episodeSearchQuery = episodeSearchQuery,
                                         onSearchQueryChange = { episodeSearchQuery = it },
                                         isSearchActive = isSearchActive,
@@ -584,9 +590,6 @@ fun DetailsContent(navController: NavController, provider: MainAPI, data: LoadRe
                                             pageSize = pageSize,
                                             onPageChange = { page ->
                                                 currentPage = page
-                                                coroutineScope.launch {
-                                                    scrollState.animateScrollToItem(1)
-                                                }
                                             },
                                         )
                                     }
@@ -621,6 +624,9 @@ private fun EpisodeToolbar(
     dubStatuses: List<DubStatus>,
     selectedDub: DubStatus?,
     onSelectDub: (DubStatus) -> Unit,
+    currentPage: Int = 1,
+    totalPages: Int = 1,
+    onPageChange: (Int) -> Unit = {},
     episodeSearchQuery: String,
     onSearchQueryChange: (String) -> Unit,
     isSearchActive: Boolean,
@@ -751,7 +757,50 @@ private fun EpisodeToolbar(
             LaunchedEffect(isSearchActive) { if (isSearchActive) searchFocusRequester.requestFocus() }
         }
 
-        Row(verticalAlignment = Alignment.CenterVertically) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            // Quick page indicator / switcher in toolbar if multiple pages
+            if (totalPages > 1 && !isSearchActive) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(end = 4.dp),
+                ) {
+                    IconButton(
+                        onClick = { onPageChange(currentPage - 1) },
+                        enabled = currentPage > 1,
+                        modifier = Modifier.size(28.dp),
+                    ) {
+                        Text(
+                            "‹",
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (currentPage > 1) DesktopUi.TextPrimary else DesktopUi.TextMuted.copy(alpha = 0.3f),
+                        )
+                    }
+                    Text(
+                        text = "$currentPage/$totalPages",
+                        style = MaterialTheme.typography.bodySmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = DesktopUi.TextMuted,
+                        modifier = Modifier.padding(horizontal = 2.dp),
+                    )
+                    IconButton(
+                        onClick = { onPageChange(currentPage + 1) },
+                        enabled = currentPage < totalPages,
+                        modifier = Modifier.size(28.dp),
+                    ) {
+                        Text(
+                            "›",
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (currentPage < totalPages) DesktopUi.TextPrimary else DesktopUi.TextMuted.copy(alpha = 0.3f),
+                        )
+                    }
+                }
+            }
+
             IconButton(onClick = {
                 onSearchActiveChange(!isSearchActive)
                 if (isSearchActive) onSearchQueryChange("")
