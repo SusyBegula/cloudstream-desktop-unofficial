@@ -5,12 +5,16 @@ import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.ArrowDropDown
@@ -83,67 +87,46 @@ fun ComposeDetailsScreen(navController: NavController, provider: MainAPI, url: S
                 }
             }
 
-            // 2. Dim Overlay
-            AnimatedVisibility(
-                visible = isPanelOpen,
-                enter = fadeIn(animationSpec = tween(300)),
-                exit = fadeOut(animationSpec = tween(300)),
-            ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(Color.Black.copy(alpha = 0.4f))
-                        .clickable { viewModel.closeLinksPanel() },
-                )
-            }
-
-            // 3. Side Panel with Links
-            if (activeLinkData != null) {
-                val offsetX by animateDpAsState(
-                    targetValue = if (isPanelOpen) 0.dp else 450.dp,
-                    animationSpec = tween(300),
-                )
-                Row(
-                    modifier = Modifier
-                        .align(Alignment.CenterEnd)
-                        .offset(x = offsetX),
+            // 2. Stream Links Modal Dialog
+            if (isPanelOpen && activeLinkData != null) {
+                Dialog(
+                    onDismissRequest = { viewModel.closeLinksPanel() },
+                    properties = DialogProperties(usePlatformDefaultWidth = false),
                 ) {
                     Box(
                         modifier = Modifier
-                            .padding(top = 24.dp)
-                            .background(Color.Black.copy(alpha = 0.6f), shape = RoundedCornerShape(topStart = 12.dp, bottomStart = 12.dp))
-                            .clickable { if (isPanelOpen) viewModel.closeLinksPanel() else viewModel.openLinksPanel(activeLinkData!!) }
-                            .padding(16.dp),
-                    ) {
-                        Icon(
-                            if (isPanelOpen) Icons.Default.Close else Icons.Default.Menu,
-                            contentDescription = "Toggle links",
-                            tint = MaterialTheme.colorScheme.onSurface,
-                        )
-                    }
-
-                    Box(
-                        modifier = Modifier
-                            .fillMaxHeight()
-                            .width(450.dp)
-                            .shadow(24.dp)
-                            .background(
-                                Brush.verticalGradient(
-                                    colors = listOf(
-                                        Color(0xFF0C0C14).copy(alpha = 0.75f),
-                                        Color(0xFF1A1A24).copy(alpha = 0.85f),
-                                    ),
-                                ),
+                            .fillMaxSize()
+                            .background(Color.Black.copy(alpha = 0.7f))
+                            .clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null,
+                                onClick = { viewModel.closeLinksPanel() },
                             ),
+                        contentAlignment = Alignment.Center,
                     ) {
-                        activeLinkData?.let { (linkProvider, linkUrl, linkHistory, linkOnPlayNext) ->
-                            LinksSidePanel(
-                                provider = linkProvider,
-                                dataUrl = linkUrl,
-                                history = linkHistory,
-                                onClose = { viewModel.closeLinksPanel() },
-                                onPlayNext = linkOnPlayNext,
-                            )
+                        Surface(
+                            modifier = Modifier
+                                .widthIn(min = 520.dp, max = 680.dp)
+                                .fillMaxHeight(0.85f)
+                                .clickable(
+                                    interactionSource = remember { MutableInteractionSource() },
+                                    indication = null,
+                                    onClick = { /* keep clicks inside dialog */ },
+                                )
+                                .shadow(32.dp, shape = RoundedCornerShape(20.dp)),
+                            shape = RoundedCornerShape(20.dp),
+                            color = DesktopUi.SurfaceCard,
+                            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.08f)),
+                        ) {
+                            activeLinkData?.let { (linkProvider, linkUrl, linkHistory, linkOnPlayNext) ->
+                                LinksModal(
+                                    provider = linkProvider,
+                                    dataUrl = linkUrl,
+                                    history = linkHistory,
+                                    onClose = { viewModel.closeLinksPanel() },
+                                    onPlayNext = linkOnPlayNext,
+                                )
+                            }
                         }
                     }
                 }

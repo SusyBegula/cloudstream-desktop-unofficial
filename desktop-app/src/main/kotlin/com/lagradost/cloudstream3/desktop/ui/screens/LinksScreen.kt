@@ -38,6 +38,12 @@ private val vlcPlayer = VlcPlayer()
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LinksSidePanel(provider: MainAPI, dataUrl: String, history: WatchHistory, onClose: () -> Unit, onPlayNext: (() -> Unit)? = null) {
+    LinksModal(provider, dataUrl, history, onClose, onPlayNext)
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun LinksModal(provider: MainAPI, dataUrl: String, history: WatchHistory, onClose: () -> Unit, onPlayNext: (() -> Unit)? = null) {
     val links = remember { mutableStateListOf<ExtractorLink>() }
     val subtitles = remember { mutableStateListOf<SubtitleFile>() }
     var statusText by remember { mutableStateOf("Finding streams for you...") }
@@ -261,9 +267,19 @@ fun LinksSidePanel(provider: MainAPI, dataUrl: String, history: WatchHistory, on
                             color = DesktopUi.TextPrimary,
                         )
                         Text(
-                            history.showName,
+                            displayTitle,
                             style = MaterialTheme.typography.bodySmall,
                             color = DesktopUi.TextMuted,
+                        )
+                    }
+                    IconButton(
+                        onClick = onClose,
+                        modifier = Modifier.size(36.dp),
+                    ) {
+                        Icon(
+                            Icons.Default.Close,
+                            contentDescription = "Close",
+                            tint = DesktopUi.TextPrimary,
                         )
                     }
                 }
