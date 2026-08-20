@@ -13,6 +13,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Menu
@@ -31,6 +32,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.lagradost.cloudstream3.*
+import com.lagradost.cloudstream3.desktop.ui.components.DesktopUi
 import com.lagradost.cloudstream3.desktop.ui.navigation.NavController
 import com.lagradost.cloudstream3.desktop.ui.screens.details.*
 import com.lagradost.player.impl.PlayerLinkHandler
@@ -173,6 +175,10 @@ fun DetailsContent(navController: NavController, provider: MainAPI, data: LoadRe
         )
     }
 
+    val lastSavedSeason = remember(data.url) {
+        com.lagradost.common.storage.DesktopDataStore.getKey<Int>("last_season_${provider.name}_${data.url}")
+    }
+
     val seasons = remember(data) {
         when (data) {
             is TvSeriesLoadResponse -> {
@@ -186,13 +192,22 @@ fun DetailsContent(navController: NavController, provider: MainAPI, data: LoadRe
             else -> emptyList()
         }
     }
-    var selectedSeason by remember(latestHistory?.season, data, seasons) {
-        mutableStateOf(latestHistory?.season?.takeIf { it in seasons } ?: seasons.firstOrNull() ?: 1)
+    var selectedSeason by remember(latestHistory?.season, lastSavedSeason, data, seasons) {
+        mutableStateOf(
+            latestHistory?.season?.takeIf { it in seasons }
+                ?: lastSavedSeason?.takeIf { it in seasons }
+                ?: seasons.firstOrNull()
+                ?: 1
+        )
     }
 
     LaunchedEffect(seasons, data) {
         if (seasons.isNotEmpty() && selectedSeason !in seasons) {
-            selectedSeason = latestHistory?.season?.takeIf { it in seasons } ?: seasons.first()
+            val validSeason = latestHistory?.season?.takeIf { it in seasons }
+                ?: lastSavedSeason?.takeIf { it in seasons }
+                ?: seasons.first()
+            selectedSeason = validSeason
+            com.lagradost.common.storage.DesktopDataStore.setKey("last_season_${provider.name}_${data.url}", validSeason)
         }
     }
 
@@ -360,69 +375,28 @@ fun DetailsContent(navController: NavController, provider: MainAPI, data: LoadRe
                                         Spacer(modifier = Modifier.height(20.dp))
                                     }
 
-                                    // Season tabs + search + sort toolbar
-                                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                                        if (!isSearchActive) {
-                                            Box(modifier = Modifier.weight(1f)) {
-                                                if (seasons.isNotEmpty()) {
-                                                    ScrollableTabRow(
-                                                        selectedTabIndex = seasons.indexOf(selectedSeason).coerceAtLeast(0),
-                                                        containerColor = Color.Transparent,
-                                                        edgePadding = 0.dp,
-                                                        divider = {},
-                                                    ) {
-                                                        seasons.forEach { season ->
-                                                            Tab(
-                                                                selected = selectedSeason == season,
-                                                                onClick = {
-                                                                    selectedSeason = season
-                                                                    episodeSearchQuery = ""
-                                                                },
-                                                                text = { Text("Season $season", fontWeight = FontWeight.Bold) },
-                                                            )
-                                                        }
-                                                    }
-                                                }
-                                            }
-                                        } else {
-                                            OutlinedTextField(
-                                                value = episodeSearchQuery,
-                                                onValueChange = { episodeSearchQuery = it },
-                                                modifier = Modifier.weight(1f).height(52.dp).focusRequester(searchFocusRequester),
-                                                placeholder = { Text("Search episodes...", style = MaterialTheme.typography.bodyMedium) },
-                                                singleLine = true,
-                                                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, modifier = Modifier.size(18.dp)) },
-                                                trailingIcon = {
-                                                    if (episodeSearchQuery.isNotEmpty()) {
-                                                        IconButton(onClick = { episodeSearchQuery = "" }) {
-                                                            Icon(Icons.Default.Close, contentDescription = "Clear", modifier = Modifier.size(16.dp))
-                                                        }
-                                                    }
-                                                },
-                                                shape = RoundedCornerShape(8.dp),
-                                                textStyle = MaterialTheme.typography.bodyMedium,
-                                            )
-                                            LaunchedEffect(isSearchActive) { if (isSearchActive) searchFocusRequester.requestFocus() }
-                                        }
-                                        IconButton(onClick = {
-                                            isSearchActive = !isSearchActive
-                                            if (!isSearchActive) episodeSearchQuery = ""
-                                        }) {
-                                            Icon(
-                                                if (isSearchActive) Icons.Default.Close else Icons.Default.Search,
-                                                contentDescription = if (isSearchActive) "Close search" else "Search episodes",
-                                                tint = if (isSearchActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-                                            )
-                                        }
-                                        TextButton(onClick = { isSortAscending = !isSortAscending }) {
-                                            Text(
-                                                text = if (isSortAscending) "Sort ▼" else "Sort ▲",
-                                                style = MaterialTheme.typography.titleMedium,
-                                                fontWeight = FontWeight.Bold,
-                                                color = MaterialTheme.colorScheme.onSurface,
-                                            )
-                                        }
-                                    }
+                                    // Episode Toolbar (Season Dropdown, Search, Sort)
+                                    EpisodeToolbar(
+                                        provider = provider,
+                                        data = data,
+                                        seasons = seasons,
+                                        selectedSeason = selectedSeason,
+                                        onSelectSeason = { season ->
+                                            selectedSeason = season
+                                            com.lagradost.common.storage.DesktopDataStore.setKey("last_season_${provider.name}_${data.url}", season)
+                                            episodeSearchQuery = ""
+                                        },
+                                        dubStatuses = emptyList(),
+                                        selectedDub = null,
+                                        onSelectDub = {},
+                                        episodeSearchQuery = episodeSearchQuery,
+                                        onSearchQueryChange = { episodeSearchQuery = it },
+                                        isSearchActive = isSearchActive,
+                                        onSearchActiveChange = { isSearchActive = it },
+                                        isSortAscending = isSortAscending,
+                                        onToggleSort = { isSortAscending = !isSortAscending },
+                                        searchFocusRequester = searchFocusRequester,
+                                    )
                                     Spacer(modifier = Modifier.height(16.dp))
                                 }
                                 is AnimeLoadResponse -> {
@@ -493,90 +467,31 @@ fun DetailsContent(navController: NavController, provider: MainAPI, data: LoadRe
                                         Spacer(modifier = Modifier.height(20.dp))
                                     }
 
-                                    // Dub tabs + Season tabs + search + sort toolbar
-                                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                                        if (!isSearchActive) {
-                                            Box(modifier = Modifier.weight(1f)) {
-                                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                                    if (dubStatuses.size > 1) {
-                                                        ScrollableTabRow(
-                                                            selectedTabIndex = dubStatuses.indexOf(selectedDub).coerceAtLeast(0),
-                                                            containerColor = Color.Transparent,
-                                                            edgePadding = 0.dp,
-                                                            divider = {},
-                                                        ) {
-                                                            dubStatuses.forEach { dub ->
-                                                                Tab(
-                                                                    selected = selectedDub == dub,
-                                                                    onClick = {
-                                                                        selectedDub = dub
-                                                                        episodeSearchQuery = ""
-                                                                    },
-                                                                    text = { Text(dub.name, fontWeight = FontWeight.Bold) },
-                                                                )
-                                                            }
-                                                        }
-                                                    }
-                                                    if (seasons.size > 1) {
-                                                        ScrollableTabRow(
-                                                            selectedTabIndex = seasons.indexOf(selectedSeason).coerceAtLeast(0),
-                                                            containerColor = Color.Transparent,
-                                                            edgePadding = 0.dp,
-                                                            divider = {},
-                                                        ) {
-                                                            seasons.forEach { season ->
-                                                                Tab(
-                                                                    selected = selectedSeason == season,
-                                                                    onClick = {
-                                                                        selectedSeason = season
-                                                                        episodeSearchQuery = ""
-                                                                    },
-                                                                    text = { Text("Season $season", fontWeight = FontWeight.Bold) },
-                                                                )
-                                                            }
-                                                        }
-                                                    }
-                                                }
-                                            }
-                                        } else {
-                                            OutlinedTextField(
-                                                value = episodeSearchQuery,
-                                                onValueChange = { episodeSearchQuery = it },
-                                                modifier = Modifier.weight(1f).height(52.dp).focusRequester(searchFocusRequester),
-                                                placeholder = { Text("Search episodes...", style = MaterialTheme.typography.bodyMedium) },
-                                                singleLine = true,
-                                                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, modifier = Modifier.size(18.dp)) },
-                                                trailingIcon = {
-                                                    if (episodeSearchQuery.isNotEmpty()) {
-                                                        IconButton(onClick = { episodeSearchQuery = "" }) {
-                                                            Icon(Icons.Default.Close, contentDescription = "Clear", modifier = Modifier.size(16.dp))
-                                                        }
-                                                    }
-                                                },
-                                                shape = RoundedCornerShape(8.dp),
-                                                textStyle = MaterialTheme.typography.bodyMedium,
-                                            )
-                                            LaunchedEffect(isSearchActive) { if (isSearchActive) searchFocusRequester.requestFocus() }
-                                        }
-                                        IconButton(onClick = {
-                                            isSearchActive = !isSearchActive
-                                            if (!isSearchActive) episodeSearchQuery = ""
-                                        }) {
-                                            Icon(
-                                                if (isSearchActive) Icons.Default.Close else Icons.Default.Search,
-                                                contentDescription = if (isSearchActive) "Close search" else "Search episodes",
-                                                tint = if (isSearchActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-                                            )
-                                        }
-                                        TextButton(onClick = { isSortAscending = !isSortAscending }) {
-                                            Text(
-                                                text = if (isSortAscending) "Sort ▼" else "Sort ▲",
-                                                style = MaterialTheme.typography.titleMedium,
-                                                fontWeight = FontWeight.Bold,
-                                                color = MaterialTheme.colorScheme.onSurface,
-                                            )
-                                        }
-                                    }
+                                    // Episode Toolbar (Dub Dropdown, Season Dropdown, Search, Sort)
+                                    EpisodeToolbar(
+                                        provider = provider,
+                                        data = data,
+                                        seasons = seasons,
+                                        selectedSeason = selectedSeason,
+                                        onSelectSeason = { season ->
+                                            selectedSeason = season
+                                            com.lagradost.common.storage.DesktopDataStore.setKey("last_season_${provider.name}_${data.url}", season)
+                                            episodeSearchQuery = ""
+                                        },
+                                        dubStatuses = dubStatuses,
+                                        selectedDub = selectedDub,
+                                        onSelectDub = { dub ->
+                                            selectedDub = dub
+                                            episodeSearchQuery = ""
+                                        },
+                                        episodeSearchQuery = episodeSearchQuery,
+                                        onSearchQueryChange = { episodeSearchQuery = it },
+                                        isSearchActive = isSearchActive,
+                                        onSearchActiveChange = { isSearchActive = it },
+                                        isSortAscending = isSortAscending,
+                                        onToggleSort = { isSortAscending = !isSortAscending },
+                                        searchFocusRequester = searchFocusRequester,
+                                    )
                                     Spacer(modifier = Modifier.height(16.dp))
                                 }
                             }
@@ -688,6 +603,169 @@ fun DetailsContent(navController: NavController, provider: MainAPI, data: LoadRe
             modifier = Modifier.padding(16.dp),
         ) {
             Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = MaterialTheme.colorScheme.onSurface)
+        }
+    }
+}
+
+@Composable
+private fun EpisodeToolbar(
+    provider: MainAPI,
+    data: LoadResponse,
+    seasons: List<Int>,
+    selectedSeason: Int,
+    onSelectSeason: (Int) -> Unit,
+    dubStatuses: List<DubStatus>,
+    selectedDub: DubStatus?,
+    onSelectDub: (DubStatus) -> Unit,
+    episodeSearchQuery: String,
+    onSearchQueryChange: (String) -> Unit,
+    isSearchActive: Boolean,
+    onSearchActiveChange: (Boolean) -> Unit,
+    isSortAscending: Boolean,
+    onToggleSort: () -> Unit,
+    searchFocusRequester: FocusRequester,
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        if (!isSearchActive) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                modifier = Modifier.weight(1f),
+            ) {
+                // Dub selector if multiple dubs
+                if (dubStatuses.size > 1) {
+                    var isDubMenuOpen by remember { mutableStateOf(false) }
+                    Box {
+                        FilledTonalButton(
+                            onClick = { isDubMenuOpen = true },
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.filledTonalButtonColors(containerColor = DesktopUi.SurfaceElevated),
+                        ) {
+                            Text(selectedDub?.name ?: "Dubs", fontWeight = FontWeight.Bold, color = DesktopUi.TextPrimary)
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Icon(Icons.Default.ArrowDropDown, contentDescription = null, tint = DesktopUi.TextPrimary)
+                        }
+                        DropdownMenu(
+                            expanded = isDubMenuOpen,
+                            onDismissRequest = { isDubMenuOpen = false },
+                        ) {
+                            dubStatuses.forEach { dub ->
+                                val isSelected = selectedDub == dub
+                                DropdownMenuItem(
+                                    text = {
+                                        Text(
+                                            dub.name,
+                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                            color = if (isSelected) DesktopUi.Accent else DesktopUi.TextPrimary,
+                                        )
+                                    },
+                                    onClick = {
+                                        onSelectDub(dub)
+                                        isDubMenuOpen = false
+                                    },
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // Season Dropdown Selector
+                if (seasons.size > 1) {
+                    var isSeasonMenuOpen by remember { mutableStateOf(false) }
+                    val seasonNamesMap = remember(data) {
+                        if (data is TvSeriesLoadResponse) data.seasonNames?.associateBy { it.season } ?: emptyMap()
+                        else emptyMap()
+                    }
+
+                    Box {
+                        FilledTonalButton(
+                            onClick = { isSeasonMenuOpen = true },
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.filledTonalButtonColors(containerColor = DesktopUi.SurfaceElevated),
+                        ) {
+                            val currentName = seasonNamesMap[selectedSeason]?.name?.takeIf { it.isNotBlank() } ?: "Season $selectedSeason"
+                            Text(currentName, fontWeight = FontWeight.Bold, color = DesktopUi.TextPrimary)
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Icon(Icons.Default.ArrowDropDown, contentDescription = null, tint = DesktopUi.TextPrimary)
+                        }
+
+                        DropdownMenu(
+                            expanded = isSeasonMenuOpen,
+                            onDismissRequest = { isSeasonMenuOpen = false },
+                        ) {
+                            seasons.forEach { season ->
+                                val sName = seasonNamesMap[season]?.name?.takeIf { it.isNotBlank() } ?: "Season $season"
+                                val isSelected = selectedSeason == season
+                                DropdownMenuItem(
+                                    text = {
+                                        Text(
+                                            sName,
+                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                            color = if (isSelected) DesktopUi.Accent else DesktopUi.TextPrimary,
+                                        )
+                                    },
+                                    onClick = {
+                                        onSelectSeason(season)
+                                        isSeasonMenuOpen = false
+                                    },
+                                )
+                            }
+                        }
+                    }
+                } else if (seasons.size == 1) {
+                    Text(
+                        text = "Season ${seasons.first()}",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = DesktopUi.TextPrimary,
+                        modifier = Modifier.padding(start = 4.dp),
+                    )
+                }
+            }
+        } else {
+            OutlinedTextField(
+                value = episodeSearchQuery,
+                onValueChange = onSearchQueryChange,
+                modifier = Modifier.weight(1f).height(52.dp).focusRequester(searchFocusRequester),
+                placeholder = { Text("Search episodes...", style = MaterialTheme.typography.bodyMedium) },
+                singleLine = true,
+                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, modifier = Modifier.size(18.dp)) },
+                trailingIcon = {
+                    if (episodeSearchQuery.isNotEmpty()) {
+                        IconButton(onClick = { onSearchQueryChange("") }) {
+                            Icon(Icons.Default.Close, contentDescription = "Clear", modifier = Modifier.size(16.dp))
+                        }
+                    }
+                },
+                shape = RoundedCornerShape(8.dp),
+                textStyle = MaterialTheme.typography.bodyMedium,
+            )
+            LaunchedEffect(isSearchActive) { if (isSearchActive) searchFocusRequester.requestFocus() }
+        }
+
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            IconButton(onClick = {
+                onSearchActiveChange(!isSearchActive)
+                if (isSearchActive) onSearchQueryChange("")
+            }) {
+                Icon(
+                    if (isSearchActive) Icons.Default.Close else Icons.Default.Search,
+                    contentDescription = if (isSearchActive) "Close search" else "Search episodes",
+                    tint = if (isSearchActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                )
+            }
+            TextButton(onClick = onToggleSort) {
+                Text(
+                    text = if (isSortAscending) "Sort ▼" else "Sort ▲",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+            }
         }
     }
 }
