@@ -185,8 +185,16 @@ object GlobalDetailsCache {
                 val resultsArr = searchObj.optJSONArray("results") ?: org.json.JSONArray()
                 val normClean = normalizeForMatch(cleanName)
 
+                val isLoadedAnime = loaded is AnimeLoadResponse || loaded.type == TvType.Anime || loaded.type == TvType.AnimeMovie ||
+                    loaded.tags?.any { it.contains("anime", ignoreCase = true) || it.contains("animation", ignoreCase = true) } == true ||
+                    loaded.name.contains("anime", ignoreCase = true)
+
+                val isLoadedTv = loaded is TvSeriesLoadResponse || loaded is AnimeLoadResponse || loaded.type == TvType.TvSeries || loaded.type == TvType.Anime
+                val loadedYear = loaded.year ?: Regex("""\((\d{4})\)""").find(loaded.name)?.groupValues?.get(1)?.toIntOrNull()
+
                 var matchedId: Int? = null
                 var matchedMediaType: String? = null
+                var bestScore = -10000
 
                 for (i in 0 until resultsArr.length()) {
                     val item = resultsArr.getJSONObject(i)
@@ -195,20 +203,43 @@ object GlobalDetailsCache {
 
                     val title = item.optString("name").ifBlank { item.optString("title", "") }
                     val normTitle = normalizeForMatch(title)
+                    val yearStr = item.optString("first_air_date").ifBlank { item.optString("release_date", "") }
+                    val itemYear = yearStr.take(4).toIntOrNull()
+                    val genreIds = item.optJSONArray("genre_ids")?.let { arr -> (0 until arr.length()).map { arr.getInt(it) } } ?: emptyList()
+                    val isAnim = genreIds.contains(16) || item.optString("original_language") == "ja"
 
-                    if (normTitle == normClean || normTitle.contains(normClean) || normClean.contains(normTitle) ||
-                        normTitle.replace("shippuuden", "shippuden") == normClean.replace("shippuuden", "shippuden")
-                    ) {
+                    var score = 0
+                    if (normTitle == normClean || normTitle.replace("shippuuden", "shippuden") == normClean.replace("shippuuden", "shippuden")) {
+                        score += 100
+                    } else if (normTitle.contains(normClean) || normClean.contains(normTitle)) {
+                        score += 50
+                    } else {
+                        continue
+                    }
+
+                    if (isLoadedTv && mediaType == "tv") score += 40
+                    if (!isLoadedTv && mediaType == "movie") score += 40
+
+                    if (isLoadedAnime) {
+                        if (isAnim) score += 80 else score -= 100
+                    } else {
+                        if (!isAnim) score += 30
+                    }
+
+                    if (loadedYear != null && itemYear != null) {
+                        if (loadedYear == itemYear) {
+                            score += 80
+                        } else {
+                            val diff = kotlin.math.abs(loadedYear - itemYear)
+                            score -= minOf(diff * 5, 80)
+                        }
+                    }
+
+                    if (score > bestScore) {
+                        bestScore = score
                         matchedId = item.optInt("id", 0).takeIf { it > 0 }
                         matchedMediaType = mediaType
-                        break
                     }
-                }
-
-                if (matchedId == null && resultsArr.length() > 0) {
-                    val first = resultsArr.getJSONObject(0)
-                    matchedId = first.optInt("id", 0).takeIf { it > 0 }
-                    matchedMediaType = first.optString("media_type", "tv")
                 }
 
                 if (matchedId != null) {
