@@ -20,6 +20,9 @@ fun SettingsPlayer() {
     var autoPlay by remember { mutableStateOf(DesktopDataStore.getKey<Boolean>(PlayerConfig.PREF_AUTO_PLAY) ?: true) }
     var autoPlayTimeout by remember { mutableStateOf(DesktopDataStore.getKey<String>(PlayerConfig.PREF_AUTO_PLAY_TIMEOUT) ?: "15000") }
 
+    var autoPlayNextEpisode by remember { mutableStateOf(DesktopDataStore.getKey<Boolean>(PlayerConfig.PREF_AUTO_PLAY_NEXT_EPISODE) ?: true) }
+    var autoPlayNextEpisodeSeconds by remember { mutableStateOf(DesktopDataStore.getKey<String>(PlayerConfig.PREF_AUTO_PLAY_NEXT_EPISODE_SECONDS) ?: "10") }
+
     Card(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
         modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
@@ -56,6 +59,42 @@ fun SettingsPlayer() {
                     DesktopDataStore.setKey(PlayerConfig.PREF_YTDL_FORMAT, it)
                 },
             )
+
+            Spacer(modifier = Modifier.height(16.dp))
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+            Spacer(modifier = Modifier.height(16.dp))
+            Text("Next Episode & Auto Play", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.SemiBold)
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Auto Play Next Episode Toggle
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Auto-play next episode when video ends", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.weight(1f))
+                Switch(
+                    checked = autoPlayNextEpisode,
+                    onCheckedChange = {
+                        autoPlayNextEpisode = it
+                        DesktopDataStore.setKey(PlayerConfig.PREF_AUTO_PLAY_NEXT_EPISODE, it)
+                    },
+                )
+            }
+
+            if (autoPlayNextEpisode) {
+                Spacer(modifier = Modifier.height(12.dp))
+                PlayerDropdownSetting(
+                    label = "Next Episode Countdown",
+                    options = listOf(
+                        "5" to "5 Seconds",
+                        "10" to "10 Seconds",
+                        "15" to "15 Seconds",
+                        "20" to "20 Seconds",
+                    ),
+                    currentValue = autoPlayNextEpisodeSeconds,
+                    onSelectionChanged = {
+                        autoPlayNextEpisodeSeconds = it
+                        DesktopDataStore.setKey(PlayerConfig.PREF_AUTO_PLAY_NEXT_EPISODE_SECONDS, it)
+                    },
+                )
+            }
 
             Spacer(modifier = Modifier.height(16.dp))
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)

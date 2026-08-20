@@ -120,7 +120,7 @@ fun ComposeDetailsScreen(navController: NavController, provider: MainAPI, url: S
                             color = DesktopUi.SurfaceCard,
                             border = BorderStroke(1.dp, Color.White.copy(alpha = 0.08f)),
                         ) {
-                            activeLinkData?.let { (linkProvider, linkUrl, linkHistory, linkOnPlayNext, linkAutoPlay) ->
+                            activeLinkData?.let { (linkProvider, linkUrl, linkHistory, linkOnPlayNext, linkAutoPlay, linkNextEp) ->
                                 LinksModal(
                                     provider = linkProvider,
                                     dataUrl = linkUrl,
@@ -128,6 +128,7 @@ fun ComposeDetailsScreen(navController: NavController, provider: MainAPI, url: S
                                     onClose = { viewModel.closeLinksPanel() },
                                     onPlayNext = linkOnPlayNext,
                                     autoPlay = linkAutoPlay,
+                                    nextEpisode = linkNextEp,
                                 )
                             }
                         }

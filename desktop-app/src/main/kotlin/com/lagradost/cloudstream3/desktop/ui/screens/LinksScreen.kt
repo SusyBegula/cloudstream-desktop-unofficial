@@ -28,6 +28,7 @@ import androidx.compose.ui.unit.sp
 import com.lagradost.cloudstream3.MainAPI
 import com.lagradost.cloudstream3.SubtitleFile
 import com.lagradost.cloudstream3.desktop.download.FfmpegDownloadManager
+import com.lagradost.cloudstream3.desktop.ui.NextEpisodeData
 import com.lagradost.cloudstream3.desktop.ui.components.DesktopUi
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.common.storage.DesktopDataStore
@@ -48,8 +49,9 @@ fun LinksSidePanel(
     onClose: () -> Unit,
     onPlayNext: (() -> Unit)? = null,
     autoPlay: Boolean = true,
+    nextEpisode: NextEpisodeData? = null,
 ) {
-    LinksModal(provider, dataUrl, history, onClose, onPlayNext, autoPlay)
+    LinksModal(provider, dataUrl, history, onClose, onPlayNext, autoPlay, nextEpisode)
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -61,6 +63,7 @@ fun LinksModal(
     onClose: () -> Unit,
     onPlayNext: (() -> Unit)? = null,
     autoPlay: Boolean = true,
+    nextEpisode: NextEpisodeData? = null,
 ) {
     val links = remember { mutableStateListOf<ExtractorLink>() }
     val subtitles = remember { mutableStateListOf<SubtitleFile>() }
@@ -228,6 +231,7 @@ fun LinksModal(
                                 statusText = "Ready — ${links.size} stream${if (links.size == 1) "" else "s"} available."
                             },
                             onPlayNext = onPlayNext,
+                            nextEpisode = nextEpisode,
                         ),
                     )
                     statusText = "Playing in embedded player: ${link.name}"

@@ -20,6 +20,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.lagradost.cloudstream3.*
+import com.lagradost.cloudstream3.desktop.ui.NextEpisodeData
 import com.lagradost.common.storage.DesktopDataStore
 import com.lagradost.common.storage.WatchHistory
 import com.lagradost.player.impl.PlayerLinkHandler
@@ -195,6 +196,7 @@ data class LinksPanelRequest(
     val history: WatchHistory,
     val onPlayNext: (() -> Unit)? = null,
     val autoPlay: Boolean = true,
+    val nextEpisode: NextEpisodeData? = null,
 )
 
 private fun resolveNextEpisode(data: LoadResponse, ep: Episode): Episode? = when (data) {
@@ -270,6 +272,33 @@ fun navigateToPlay(
         }
     }
     val nextEp = resolveNextEpisode(data, ep)
-    val onPlayNext: (() -> Unit)? = nextEp?.let { ne -> { navigateToPlay(provider, data, ne, onPlay, autoPlay = true) } }
-    onPlay(LinksPanelRequest(provider, patchedData, history, onPlayNext, autoPlay))
+    val nextEpData = nextEp?.let { ne ->
+        val epTitle = when {
+            ne.name.isNullOrBlank() -> "Episode ${ne.episode ?: "?"}"
+            ne.episode != null && (
+                ne.name.equals("E${ne.episode}", ignoreCase = true) ||
+                ne.name.equals("Episode ${ne.episode}", ignoreCase = true) ||
+                ne.name.equals("S${ne.season}E${ne.episode}", ignoreCase = true) ||
+                ne.name?.matches(Regex("""(?i)^S\d+E${ne.episode}$""")) == true
+            ) -> "Episode ${ne.episode}"
+            ne.episode != null -> "Episode ${ne.episode}: ${ne.name}"
+            else -> ne.name
+        }
+        val backdrop = (data as? TvSeriesLoadResponse)?.backgroundPosterUrl
+            ?: (data as? AnimeLoadResponse)?.backgroundPosterUrl
+            ?: data.posterUrl
+
+        NextEpisodeData(
+            title = epTitle,
+            episodeNumber = ne.episode,
+            seasonNumber = ne.season,
+            posterUrl = ne.posterUrl ?: data.posterUrl,
+            description = ne.description,
+            showName = data.name,
+            backdropUrl = backdrop,
+            onPlay = { navigateToPlay(provider, data, ne, onPlay, autoPlay = true) },
+        )
+    }
+    val onPlayNext: (() -> Unit)? = nextEpData?.onPlay
+    onPlay(LinksPanelRequest(provider, patchedData, history, onPlayNext, autoPlay, nextEpData))
 }

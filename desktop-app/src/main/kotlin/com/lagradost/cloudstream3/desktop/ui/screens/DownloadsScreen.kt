@@ -27,11 +27,14 @@ import com.lagradost.cloudstream3.desktop.download.ActiveDownload
 import com.lagradost.cloudstream3.desktop.download.DownloadStatus
 import com.lagradost.cloudstream3.desktop.download.FfmpegDownloadManager
 import com.lagradost.cloudstream3.desktop.ui.LocalVideoPlayer
+import com.lagradost.cloudstream3.desktop.ui.NextEpisodeData
 import com.lagradost.cloudstream3.desktop.ui.VideoLaunchData
 import com.lagradost.cloudstream3.desktop.ui.components.DesktopUi
 import com.lagradost.cloudstream3.desktop.ui.navigation.NavController
 import com.lagradost.cloudstream3.desktop.ui.navigation.Screen
-import com.lagradost.cloudstream3.utils.newExtractorLink
+import com.lagradost.cloudstream3.utils.ExtractorLink
+import com.lagradost.cloudstream3.utils.ExtractorLinkType
+import com.lagradost.cloudstream3.utils.Qualities
 import com.lagradost.common.platform.PlatformPaths
 import com.lagradost.common.storage.DesktopDataStore
 import com.lagradost.common.storage.DownloadedItemRecord
@@ -221,34 +224,7 @@ fun ComposeDownloadsScreen(navController: NavController) {
                         DownloadedItemCard(
                             item = item,
                             onPlay = {
-                                coroutineScope.launch {
-                                    val link = newExtractorLink(
-                                        source = "Offline File",
-                                        name = "Local Download",
-                                        url = item.localFilePath,
-                                    )
-                                    playVideo(
-                                        VideoLaunchData(
-                                            links = listOf(link),
-                                            initialIndex = 0,
-                                            title = "${item.showName} - ${item.episodeTitle}",
-                                            subtitles = emptyList(),
-                                            startPositionMs = 0L,
-                                            history = WatchHistory(
-                                                parentId = item.showUrl.hashCode().toString(),
-                                                showName = item.showName,
-                                                showUrl = item.showUrl,
-                                                apiName = "Offline",
-                                                posterUrl = item.posterUrl,
-                                                episode = item.episode,
-                                                season = item.season,
-                                                episodeId = item.episodeId,
-                                                position = 0L,
-                                                duration = 0L,
-                                            ),
-                                        ),
-                                    )
-                                }
+                                playDownloadedEpisode(item, filteredItems, playVideo)
                             },
                             onOpenFolder = {
                                 try {
@@ -504,3 +480,70 @@ private fun formatDate(timestamp: Long): String {
     val sdf = SimpleDateFormat("MMM d, yyyy", Locale.getDefault())
     return sdf.format(Date(timestamp))
 }
+
+private fun playDownloadedEpisode(
+    item: DownloadedItemRecord,
+    allItems: List<DownloadedItemRecord>,
+    playVideo: (VideoLaunchData?) -> Unit,
+) {
+    val link = ExtractorLink(
+        source = "Offline File",
+        name = "Local Download",
+        url = item.localFilePath,
+        referer = "",
+        quality = Qualities.Unknown.value,
+        type = ExtractorLinkType.VIDEO,
+    )
+    val showItems = allItems.filter { it.showUrl == item.showUrl }
+    val curSeason = item.season
+    val curEpisode = item.episode
+
+    val nextItem = showItems.find {
+        val s = it.season
+        val e = it.episode
+        (s == curSeason && e != null && curEpisode != null && e == curEpisode + 1) ||
+        (s != null && curSeason != null && s == curSeason + 1 && e == 1)
+    } ?: run {
+        val currentIdx = showItems.indexOfFirst { it.id == item.id }
+        if (currentIdx >= 0 && currentIdx + 1 < showItems.size) showItems[currentIdx + 1] else null
+    }
+
+    val nextEpData = nextItem?.let { next ->
+        NextEpisodeData(
+            title = next.episodeTitle,
+            episodeNumber = next.episode,
+            seasonNumber = next.season,
+            posterUrl = next.posterUrl ?: item.posterUrl,
+            description = null,
+            showName = next.showName,
+            backdropUrl = next.posterUrl ?: item.posterUrl,
+            onPlay = {
+                playDownloadedEpisode(next, allItems, playVideo)
+            },
+        )
+    }
+
+    playVideo(
+        VideoLaunchData(
+            links = listOf(link),
+            initialIndex = 0,
+            title = "${item.showName} - ${item.episodeTitle}",
+            subtitles = emptyList(),
+            startPositionMs = 0L,
+            history = WatchHistory(
+                parentId = item.showUrl.hashCode().toString(),
+                showName = item.showName,
+                showUrl = item.showUrl,
+                apiName = "Offline",
+                posterUrl = item.posterUrl,
+                episode = item.episode,
+                season = item.season,
+                episodeId = item.episodeId,
+                position = 0L,
+                duration = 0L,
+            ),
+            nextEpisode = nextEpData,
+        ),
+    )
+}
+
