@@ -11,6 +11,99 @@ import kotlinx.coroutines.withContext
 import java.util.Collections
 import java.util.LinkedHashMap
 
+fun normalizeEpisodeList(episodes: List<Episode>) {
+    if (episodes.isEmpty()) return
+
+    val jsonSeasonPattern = Regex("""(?i)["']season["']\s*:\s*(\d+)""")
+    val jsonEpisodePattern = Regex("""(?i)["']episode["']\s*:\s*(\d+)""")
+    val sPattern1 = Regex("""(?i)\bS(?:eason)?\s*(\d{1,2})\s*[-._ ]*\s*(?:E(?:pisode)?|x)\s*(\d{1,3})\b""")
+    val sPattern2 = Regex("""(?i)\b(\d{1,2})x(\d{1,3})\b""")
+    val sOnlyPattern = Regex("""(?i)[/_-]s(?:eason)?[-_]?(\d{1,2})[/_-]""")
+
+    var currentSeason = 1
+    var prevEpNumber = -1
+
+    for (ep in episodes) {
+        val titleText = ep.name ?: ""
+        val urlText = ep.data
+        val descText = ep.description ?: ""
+
+        var parsedSeason: Int? = null
+        var parsedEpisode: Int? = null
+
+        // 1. Check JSON encoded in ep.data (common in CineStream / Multi-providers)
+        if (urlText.startsWith("{") && urlText.endsWith("}")) {
+            val jsonSeasonMatch = jsonSeasonPattern.find(urlText)
+            val jsonEpisodeMatch = jsonEpisodePattern.find(urlText)
+            if (jsonSeasonMatch != null) {
+                parsedSeason = jsonSeasonMatch.groupValues[1].toIntOrNull()
+            }
+            if (jsonEpisodeMatch != null) {
+                parsedEpisode = jsonEpisodeMatch.groupValues[1].toIntOrNull()
+            }
+        }
+
+        // 2. Check title / data / description for standard SxxExx
+        if (parsedSeason == null) {
+            val match1 = sPattern1.find(titleText) ?: sPattern1.find(urlText) ?: sPattern1.find(descText)
+            if (match1 != null) {
+                parsedSeason = match1.groupValues[1].toIntOrNull()
+                parsedEpisode = match1.groupValues[2].toIntOrNull()
+            } else {
+                val match2 = sPattern2.find(titleText) ?: sPattern2.find(urlText)
+                if (match2 != null) {
+                    parsedSeason = match2.groupValues[1].toIntOrNull()
+                    parsedEpisode = match2.groupValues[2].toIntOrNull()
+                } else {
+                    val matchS = sOnlyPattern.find(urlText) ?: sOnlyPattern.find(titleText)
+                    if (matchS != null) {
+                        parsedSeason = matchS.groupValues[1].toIntOrNull()
+                    }
+                }
+            }
+        }
+
+        if (parsedSeason != null && parsedSeason > 0) {
+            ep.season = parsedSeason
+            currentSeason = parsedSeason
+            if (parsedEpisode != null && parsedEpisode > 0 && (ep.episode == null || ep.episode == 0)) {
+                ep.episode = parsedEpisode
+            }
+            prevEpNumber = ep.episode ?: -1
+        } else if (ep.season != null && ep.season!! > 0) {
+            currentSeason = ep.season!!
+            prevEpNumber = ep.episode ?: -1
+        } else {
+            val epNum = ep.episode
+            if (epNum != null && epNum > 0) {
+                if (prevEpNumber != -1 && epNum <= prevEpNumber) {
+                    currentSeason++
+                }
+                prevEpNumber = epNum
+            }
+            ep.season = currentSeason
+        }
+    }
+}
+
+fun normalizeTvSeriesEpisodes(data: TvSeriesLoadResponse) {
+    normalizeEpisodeList(data.episodes)
+}
+
+fun normalizeAnimeEpisodes(data: AnimeLoadResponse) {
+    data.episodes.values.forEach { list ->
+        normalizeEpisodeList(list)
+    }
+}
+
+fun normalizeLoadResponseEpisodes(data: LoadResponse) {
+    when (data) {
+        is TvSeriesLoadResponse -> normalizeTvSeriesEpisodes(data)
+        is AnimeLoadResponse -> normalizeAnimeEpisodes(data)
+        else -> {}
+    }
+}
+
 object GlobalDetailsCache {
     // Size-limited LRU Cache for the last 50 visited pages to prevent OutOfMemory errors
     val cache: MutableMap<String, LoadResponse> = Collections.synchronizedMap(
@@ -23,7 +116,10 @@ object GlobalDetailsCache {
 
     suspend fun fetchRaw(provider: MainAPI, url: String): LoadResponse? {
         val existing = cache[url]
-        if (existing != null) return existing
+        if (existing != null) {
+            normalizeLoadResponseEpisodes(existing)
+            return existing
+        }
 
         val loaded = withContext(Dispatchers.IO) {
             try {
@@ -34,6 +130,7 @@ object GlobalDetailsCache {
         }
 
         if (loaded != null) {
+            normalizeLoadResponseEpisodes(loaded)
             cache[url] = loaded
         }
         return loaded

@@ -135,9 +135,18 @@ private fun resolveNextEpisode(data: LoadResponse, ep: Episode): Episode? = when
     is AnimeLoadResponse -> {
         val dubEps = data.episodes.values
             .find { list -> list.any { it.data == ep.data } }
-            ?.sortedBy { it.episode ?: Int.MAX_VALUE }
-        val currentIdx = dubEps?.indexOfFirst { it.data == ep.data } ?: -1
-        if (dubEps != null && currentIdx >= 0 && currentIdx + 1 < dubEps.size) dubEps[currentIdx + 1] else null
+        val currentSeason = ep.season
+        val sortedSeasonEps = (dubEps ?: emptyList())
+            .filter { it.season == currentSeason || (it.season == null && currentSeason == null) }
+            .sortedBy { it.episode ?: Int.MAX_VALUE }
+        val currentIdx = sortedSeasonEps.indexOfFirst { it.data == ep.data }
+        val nextEpSameSeason = if (currentIdx >= 0 && currentIdx + 1 < sortedSeasonEps.size) sortedSeasonEps[currentIdx + 1] else null
+        nextEpSameSeason ?: run {
+            val nextSeason = (currentSeason ?: 0) + 1
+            (dubEps ?: emptyList())
+                .filter { it.season == nextSeason }
+                .minByOrNull { it.episode ?: Int.MAX_VALUE }
+        }
     }
     else -> null
 }

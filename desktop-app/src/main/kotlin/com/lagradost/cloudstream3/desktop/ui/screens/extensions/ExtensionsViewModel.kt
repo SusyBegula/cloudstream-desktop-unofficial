@@ -2,6 +2,7 @@ package com.lagradost.cloudstream3.desktop.ui.screens.extensions
 
 import com.lagradost.cloudstream3.desktop.repo.DesktopRepositoryManager
 import com.lagradost.cloudstream3.desktop.repo.SitePlugin
+import com.lagradost.cloudstream3.ui.settings.extensions.RepositoryData
 import com.lagradost.runtime.loader.ExtensionLoader
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -23,6 +24,8 @@ data class LocalPlugin(
 )
 
 class ExtensionsViewModel(private val coroutineScope: CoroutineScope) {
+    val savedRepositories = DesktopRepositoryManager.savedRepositories
+
     private val _isFetching = MutableStateFlow(false)
     val isFetching = _isFetching.asStateFlow()
 
@@ -48,6 +51,7 @@ class ExtensionsViewModel(private val coroutineScope: CoroutineScope) {
                 }
                 _plugins.value = DesktopRepositoryManager.getAllPlugins()
                 _statusText.value = "Fetched ${_plugins.value.size} plugins from ${DesktopRepositoryManager.getSavedRepositories().size} repositories."
+                refreshInstalled()
             } catch (e: Throwable) {
                 _statusText.value = "Error: ${e.message}"
             } finally {
@@ -59,6 +63,7 @@ class ExtensionsViewModel(private val coroutineScope: CoroutineScope) {
     fun loadPluginsFromManager() {
         _plugins.value = DesktopRepositoryManager.getAllPlugins()
         _statusText.value = "Showing ${_plugins.value.size} plugins from ${DesktopRepositoryManager.getSavedRepositories().size} repositories."
+        refreshInstalled()
     }
 
     fun refreshInstalled() {
@@ -91,6 +96,54 @@ class ExtensionsViewModel(private val coroutineScope: CoroutineScope) {
                 }
         }
         _installedPlugins.value = list
+    }
+
+    fun getRemotePluginsForRepo(repo: RepositoryData): List<SitePlugin> {
+        val direct = DesktopRepositoryManager.getPluginsForRepository(repo.url)
+        if (direct.isNotEmpty()) return direct
+        return _plugins.value.filter { it.first.equals(repo.name, ignoreCase = true) }.map { it.second }
+    }
+
+    fun getInstalledPluginsForRepo(repo: RepositoryData): List<LocalPlugin> {
+        val repoPlugins = getRemotePluginsForRepo(repo)
+        val internalNames = repoPlugins.map { it.internalName }.toSet()
+        return _installedPlugins.value.filter { installed ->
+            internalNames.contains(installed.internalName) || installed.repoName.equals(repo.name, ignoreCase = true)
+        }
+    }
+
+    fun getLocalPluginsNotFromSavedRepos(): List<LocalPlugin> {
+        val savedRepos = DesktopRepositoryManager.getSavedRepositories()
+        val allRemoteNames = savedRepos.flatMap { repo ->
+            getRemotePluginsForRepo(repo).map { it.internalName }
+        }.toSet()
+        return _installedPlugins.value.filter { !allRemoteNames.contains(it.internalName) }
+    }
+
+    fun addRepository(url: String, onResult: (Boolean, String) -> Unit) {
+        if (url.isBlank()) return
+        coroutineScope.launch {
+            try {
+                val addedRepos = withContext(Dispatchers.IO) {
+                    DesktopRepositoryManager.addRepositoryFromInput(url)
+                }
+                if (addedRepos != null && addedRepos.isNotEmpty()) {
+                    val repoNames = addedRepos.take(2).joinToString { it.name } + if (addedRepos.size > 2) " and ${addedRepos.size - 2} more" else ""
+                    fetchPlugins()
+                    onResult(true, "Added: $repoNames")
+                } else {
+                    onResult(false, "Failed to load repository. Check the URL or shortcode.")
+                }
+            } catch (e: Throwable) {
+                onResult(false, "Error: ${e.message}")
+            }
+        }
+    }
+
+    fun removeRepository(url: String) {
+        DesktopRepositoryManager.removeRepository(url)
+        _plugins.value = DesktopRepositoryManager.getAllPlugins()
+        refreshInstalled()
     }
 
     fun installPlugin(repoName: String, plugin: SitePlugin, onResult: (String) -> Unit) {
@@ -146,6 +199,23 @@ class ExtensionsViewModel(private val coroutineScope: CoroutineScope) {
         _pluginRequiringBypass.value = null
     }
 
+    fun uninstallPlugin(internalName: String) {
+        val local = _installedPlugins.value.find { it.internalName == internalName }
+        if (local != null) {
+            uninstallPlugins(listOf(local))
+        } else {
+            coroutineScope.launch(Dispatchers.IO) {
+                val extensionsDir = DesktopRepositoryManager.getExtensionsDir()
+                extensionsDir.walkTopDown().filter { it.isFile && (it.name == "$internalName.jar" || it.name == "$internalName.cs3") }.forEach { file ->
+                    ExtensionLoader.unloadPlugin(file.absolutePath)
+                    file.delete()
+                    File(file.parentFile, "${file.nameWithoutExtension}-jvm.jar").delete()
+                }
+                refreshInstalled()
+            }
+        }
+    }
+
     fun uninstallPlugins(plugins: List<LocalPlugin>) {
         coroutineScope.launch(Dispatchers.IO) {
             for (plugin in plugins) {
@@ -180,3 +250,4 @@ class ExtensionsViewModel(private val coroutineScope: CoroutineScope) {
         }
     }
 }
+

@@ -397,33 +397,36 @@ private fun StreamStatusCard(
 
 @Composable
 private fun PlayerSelector(selectedPlayer: String, onSelect: (String) -> Unit) {
-    Row(
+    Column(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 20.dp, vertical = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text("Player", style = MaterialTheme.typography.labelLarge, color = DesktopUi.TextMuted)
-        Spacer(modifier = Modifier.width(16.dp))
-        FilterChip(
-            selected = selectedPlayer == "mpv",
-            onClick = { onSelect("mpv") },
-            label = { Text("MPV") },
-            colors = FilterChipDefaults.filterChipColors(
-                selectedContainerColor = DesktopUi.AccentSoft,
-                selectedLabelColor = DesktopUi.Accent,
-            ),
-        )
-        Spacer(modifier = Modifier.width(8.dp))
-        FilterChip(
-            selected = selectedPlayer == "vlc",
-            onClick = { onSelect("vlc") },
-            label = { Text("VLC") },
-            colors = FilterChipDefaults.filterChipColors(
-                selectedContainerColor = DesktopUi.AccentSoft,
-                selectedLabelColor = DesktopUi.Accent,
-            ),
-        )
+        Text("Player", style = MaterialTheme.typography.labelMedium, color = DesktopUi.TextMuted)
+        Spacer(modifier = Modifier.height(6.dp))
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            FilterChip(
+                selected = selectedPlayer == "mpv",
+                onClick = { onSelect("mpv") },
+                label = { Text("MPV") },
+                colors = FilterChipDefaults.filterChipColors(
+                    selectedContainerColor = DesktopUi.AccentSoft,
+                    selectedLabelColor = DesktopUi.Accent,
+                ),
+            )
+            FilterChip(
+                selected = selectedPlayer == "vlc",
+                onClick = { onSelect("vlc") },
+                label = { Text("VLC") },
+                colors = FilterChipDefaults.filterChipColors(
+                    selectedContainerColor = DesktopUi.AccentSoft,
+                    selectedLabelColor = DesktopUi.Accent,
+                ),
+            )
+        }
     }
 }
 

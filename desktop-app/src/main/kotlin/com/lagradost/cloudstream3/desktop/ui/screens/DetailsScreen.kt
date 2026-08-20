@@ -173,9 +173,27 @@ fun DetailsContent(navController: NavController, provider: MainAPI, data: LoadRe
         )
     }
 
-    val seasons = remember(data) { if (data is TvSeriesLoadResponse) data.episodes.mapNotNull { it.season }.distinct().sorted() else emptyList() }
-    var selectedSeason by remember(latestHistory?.season, data) {
-        mutableStateOf(if (data is TvSeriesLoadResponse) latestHistory?.season ?: seasons.firstOrNull() ?: 1 else 1)
+    val seasons = remember(data) {
+        when (data) {
+            is TvSeriesLoadResponse -> {
+                normalizeTvSeriesEpisodes(data)
+                data.episodes.mapNotNull { it.season }.distinct().sorted()
+            }
+            is AnimeLoadResponse -> {
+                normalizeAnimeEpisodes(data)
+                data.episodes.values.flatten().mapNotNull { it.season }.distinct().sorted()
+            }
+            else -> emptyList()
+        }
+    }
+    var selectedSeason by remember(latestHistory?.season, data, seasons) {
+        mutableStateOf(latestHistory?.season?.takeIf { it in seasons } ?: seasons.firstOrNull() ?: 1)
+    }
+
+    LaunchedEffect(seasons, data) {
+        if (seasons.isNotEmpty() && selectedSeason !in seasons) {
+            selectedSeason = latestHistory?.season?.takeIf { it in seasons } ?: seasons.first()
+        }
     }
 
     val showHistory = remember(data.url, historyUpdatesVal) {
@@ -211,7 +229,7 @@ fun DetailsContent(navController: NavController, provider: MainAPI, data: LoadRe
             } else {
                 item {
                     Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
-                        Column(modifier = Modifier.widthIn(max = 850.dp).padding(horizontal = 16.dp)) {
+                        Column(modifier = Modifier.widthIn(max = 1000.dp).padding(horizontal = 16.dp)) {
                             when (data) {
                                 is MovieLoadResponse, is TorrentLoadResponse -> {
                                     if (latestHistory != null && latestHistory.duration > 0) {
@@ -475,25 +493,47 @@ fun DetailsContent(navController: NavController, provider: MainAPI, data: LoadRe
                                         Spacer(modifier = Modifier.height(20.dp))
                                     }
 
-                                    // Dub tabs + search + sort toolbar
+                                    // Dub tabs + Season tabs + search + sort toolbar
                                     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                                         if (!isSearchActive) {
                                             Box(modifier = Modifier.weight(1f)) {
-                                                if (dubStatuses.size > 1) {
-                                                    TabRow(
-                                                        selectedTabIndex = dubStatuses.indexOf(selectedDub).coerceAtLeast(0),
-                                                        containerColor = Color.Transparent,
-                                                        divider = {},
-                                                    ) {
-                                                        dubStatuses.forEach { dub ->
-                                                            Tab(
-                                                                selected = selectedDub == dub,
-                                                                onClick = {
-                                                                    selectedDub = dub
-                                                                    episodeSearchQuery = ""
-                                                                },
-                                                                text = { Text(dub.name, fontWeight = FontWeight.Bold) },
-                                                            )
+                                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                                    if (dubStatuses.size > 1) {
+                                                        ScrollableTabRow(
+                                                            selectedTabIndex = dubStatuses.indexOf(selectedDub).coerceAtLeast(0),
+                                                            containerColor = Color.Transparent,
+                                                            edgePadding = 0.dp,
+                                                            divider = {},
+                                                        ) {
+                                                            dubStatuses.forEach { dub ->
+                                                                Tab(
+                                                                    selected = selectedDub == dub,
+                                                                    onClick = {
+                                                                        selectedDub = dub
+                                                                        episodeSearchQuery = ""
+                                                                    },
+                                                                    text = { Text(dub.name, fontWeight = FontWeight.Bold) },
+                                                                )
+                                                            }
+                                                        }
+                                                    }
+                                                    if (seasons.size > 1) {
+                                                        ScrollableTabRow(
+                                                            selectedTabIndex = seasons.indexOf(selectedSeason).coerceAtLeast(0),
+                                                            containerColor = Color.Transparent,
+                                                            edgePadding = 0.dp,
+                                                            divider = {},
+                                                        ) {
+                                                            seasons.forEach { season ->
+                                                                Tab(
+                                                                    selected = selectedSeason == season,
+                                                                    onClick = {
+                                                                        selectedSeason = season
+                                                                        episodeSearchQuery = ""
+                                                                    },
+                                                                    text = { Text("Season $season", fontWeight = FontWeight.Bold) },
+                                                                )
+                                                            }
                                                         }
                                                     }
                                                 }
@@ -583,14 +623,16 @@ fun DetailsContent(navController: NavController, provider: MainAPI, data: LoadRe
                             val isLatest = latestHistory != null && latestHistory.episodeId == ep.data
                             val history = showHistory.values.find { it.episodeId == ep.data }
                             Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
-                                Box(modifier = Modifier.widthIn(max = 850.dp).padding(horizontal = 16.dp)) {
+                                Box(modifier = Modifier.widthIn(max = 1000.dp).padding(horizontal = 16.dp)) {
                                     EpisodeCard(ep, isLatest, history, provider, data, onPlay)
                                 }
                             }
                         }
                     }
                 } else if (data is AnimeLoadResponse) {
-                    val filteredEpisodes = (selectedDub?.let { data.episodes[it] } ?: emptyList())
+                    val allDubEpisodes = (selectedDub?.let { data.episodes[it] } ?: emptyList())
+                    val filteredEpisodes = allDubEpisodes
+                        .filter { it.season == selectedSeason || (it.season == null && selectedSeason == 1) || seasons.isEmpty() }
                         .let { list ->
                             if (isSortAscending) {
                                 list.sortedBy { it.episode ?: Int.MAX_VALUE }
@@ -627,7 +669,7 @@ fun DetailsContent(navController: NavController, provider: MainAPI, data: LoadRe
                             val isLatest = latestHistory != null && latestHistory.episodeId == ep.data
                             val history = showHistory.values.find { it.episodeId == ep.data }
                             Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
-                                Box(modifier = Modifier.widthIn(max = 850.dp).padding(horizontal = 16.dp)) {
+                                Box(modifier = Modifier.widthIn(max = 1000.dp).padding(horizontal = 16.dp)) {
                                     EpisodeCard(ep, isLatest, history, provider, data, onPlay)
                                 }
                             }
