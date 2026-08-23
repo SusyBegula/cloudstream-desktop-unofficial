@@ -642,14 +642,6 @@ fun DetailsContent(
                 Spacer(modifier = Modifier.height(32.dp))
             }
         }
-
-        // ── Back button ──
-        IconButton(
-            onClick = { navController.goBack() },
-            modifier = Modifier.padding(16.dp),
-        ) {
-            Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = MaterialTheme.colorScheme.onSurface)
-        }
     }
 }
 

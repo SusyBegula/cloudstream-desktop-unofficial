@@ -32,6 +32,12 @@ import java.io.File
  *   7. Compose UI window
  */
 fun main() {
+    // Fix for Linux non-reparenting tiling window managers (Hyprland, Sway, bspwm, Xmonad)
+    // Ensures Java AWT / Skiko updates the canvas viewport when the window is tiled/resized.
+    System.setProperty("_JAVA_AWT_WM_NONREPARENTING", "1")
+    System.setProperty("awt.useSystemAAFontSettings", "on")
+    System.setProperty("swing.aatext", "true")
+
     AppLogger.i("Launching CloudStream Desktop Client...")
     AppLogger.i("Platform: ${PlatformPaths.currentOS}")
     AppLogger.i("App data directory: ${PlatformPaths.appDataDir.absolutePath}")

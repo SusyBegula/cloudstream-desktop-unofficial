@@ -97,7 +97,7 @@ fun EmbeddedVideoPlayer(
                 ) {
                     key(currentLinkIndex, replayTrigger) {
                         ComposeMpvPlayer(
-                            modifier = if (isLoading) Modifier.size(1.dp) else Modifier.fillMaxSize(),
+                            modifier = Modifier.fillMaxSize(),
                             link = launchData.links[currentLinkIndex],
                             title = launchData.title,
                             subtitles = launchData.subtitles,

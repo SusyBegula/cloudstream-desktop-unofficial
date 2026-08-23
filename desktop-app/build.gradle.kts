@@ -144,6 +144,11 @@ val stripPlaywrightDriver by tasks.registering {
 compose.desktop {
     application {
         mainClass = "com.lagradost.cloudstream3.desktop.MainKt"
+        jvmArgs += listOf(
+            "-D_JAVA_AWT_WM_NONREPARENTING=1",
+            "-Dawt.useSystemAAFontSettings=on",
+            "-Dswing.aatext=true",
+        )
         val javaMajor = JavaVersion.current().majorVersion.toIntOrNull() ?: 21
         if (javaMajor < 24) {
             jvmArgs += listOf("-Djava.security.manager=allow")

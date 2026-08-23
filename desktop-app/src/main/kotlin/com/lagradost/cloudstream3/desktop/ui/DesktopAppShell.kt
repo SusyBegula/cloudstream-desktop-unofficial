@@ -103,7 +103,8 @@ fun DesktopAppShell(
                     .fillMaxHeight()
                     .background(MaterialTheme.colorScheme.surface),
             ) {
-                val contentPadding = if (current is Screen.Home) {
+                val isFullBleed = current is Screen.Home || current is Screen.Details
+                val contentPadding = if (isFullBleed) {
                     PaddingValues(0.dp)
                 } else {
                     PaddingValues(top = 66.dp, start = 20.dp, end = 20.dp, bottom = 12.dp)
@@ -120,7 +121,7 @@ fun DesktopAppShell(
                 TopBar(
                     showBack = showBack,
                     onBack = { navController.goBack() },
-                    isHome = current is Screen.Home,
+                    isTransparent = isFullBleed,
                 )
 
                 SnackbarHost(
@@ -277,9 +278,9 @@ private fun DockItem(
 private fun TopBar(
     showBack: Boolean,
     onBack: () -> Unit,
-    isHome: Boolean,
+    isTransparent: Boolean,
 ) {
-    val bg = if (isHome) Color.Transparent else MaterialTheme.colorScheme.surface
+    val bg = if (isTransparent) Color.Transparent else MaterialTheme.colorScheme.surface
     Column(modifier = Modifier.fillMaxWidth().background(bg)) {
         Row(
             modifier = Modifier
@@ -304,7 +305,7 @@ private fun TopBar(
             }
             Spacer(Modifier.weight(1f))
         }
-        if (!isHome) {
+        if (!isTransparent) {
             HorizontalDivider(color = LocalDesktopTheme.current.Divider, thickness = 0.5.dp)
         }
     }

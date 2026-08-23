@@ -14,7 +14,9 @@ import io.ktor.server.response.respondBytesWriter
 import io.ktor.server.routing.get
 import io.ktor.server.routing.routing
 import io.ktor.utils.io.writeFully
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.asCoroutineDispatcher
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import okhttp3.Call
@@ -201,7 +203,13 @@ object LocalStreamProxy {
                     contentLength = contentLengthParam,
                 ) {
                     val streamSource = response.body?.source() ?: return@respondBytesWriter
-                    val buffer = ByteArray(16384)
+                    val buffer = ByteArray(32768)
+                    val job = currentCoroutineContext()[Job]
+                    job?.invokeOnCompletion {
+                        try {
+                            response.close()
+                        } catch (_: Throwable) {}
+                    }
                     try {
                         while (!isClosedForWrite) {
                             val bytesRead = withContext(ProxyIoDispatcher) {
@@ -215,7 +223,9 @@ object LocalStreamProxy {
                         // Ignored (Client disconnected, e.g. user seeking)
                     } finally {
                         withContext(ProxyIoDispatcher) {
-                            response.body?.close()
+                            try {
+                                response.close()
+                            } catch (_: Throwable) {}
                         }
                     }
                 }

@@ -16,8 +16,8 @@ object PlayerConfig {
     const val PREF_SPEED = "player_speed"
 
     fun applyMpvSettings(handle: Pointer, lib: MpvLibrary) {
-        // Hardware Acceleration (Default: auto-safe)
-        val hwdec = DesktopDataStore.getKey<String>(PREF_HWDEC) ?: "auto-safe"
+        // Hardware Acceleration (Default: auto-safe, prioritize vaapi/nvdec to avoid experimental vulkan seek deadlocks)
+        val hwdec = DesktopDataStore.getKey<String>(PREF_HWDEC) ?: "vaapi,vaapi-copy,nvdec,nvdec-copy,auto-safe"
         lib.mpv_set_option_string(handle, "hwdec", hwdec)
 
         // Subtitles Size (Default: 45)
@@ -44,10 +44,15 @@ object PlayerConfig {
         lib.mpv_set_option_string(handle, "msg-level", "all=v")
         lib.mpv_set_option_string(handle, "terminal", "yes")
 
-        // Fast Startup Optimizations
+        // Playback and Caching Optimizations
         lib.mpv_set_option_string(handle, "cache", "yes")
-        lib.mpv_set_option_string(handle, "demuxer-max-bytes", "150M") // Generous buffer
-        lib.mpv_set_option_string(handle, "demuxer-max-back-bytes", "50M")
-        lib.mpv_set_option_string(handle, "cache-pause", "no") // Start playing IMMEDIATELY without waiting to fill the buffer
+        lib.mpv_set_option_string(handle, "cache-pause", "yes")
+        lib.mpv_set_option_string(handle, "cache-pause-wait", "1")
+        lib.mpv_set_option_string(handle, "hr-seek", "no")
+        lib.mpv_set_option_string(handle, "network-timeout", "15")
+        lib.mpv_set_option_string(handle, "demuxer-max-bytes", "150M")
+        lib.mpv_set_option_string(handle, "demuxer-max-back-bytes", "0")
+        lib.mpv_set_option_string(handle, "demuxer-readahead-secs", "20")
+        lib.mpv_set_option_string(handle, "script-opts", "osc-seekbarkeyframes=yes")
     }
 }

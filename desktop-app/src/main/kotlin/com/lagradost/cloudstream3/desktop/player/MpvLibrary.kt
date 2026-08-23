@@ -69,9 +69,21 @@ interface MpvLibrary : Library {
     fun mpv_create(): Pointer?
     fun mpv_initialize(handle: Pointer): Int
     fun mpv_set_option_string(ctx: Pointer, name: String, data: String): Int
-    fun mpv_get_property_string(ctx: Pointer, name: String): String?
+    fun mpv_get_property_string(ctx: Pointer, name: String): Pointer?
     fun mpv_command_string(ctx: Pointer, args: String): Int
+    fun mpv_free(data: Pointer)
     fun mpv_terminate_destroy(handle: Pointer)
+
+    fun getProperty(ctx: Pointer, name: String): String? {
+        val ptr = mpv_get_property_string(ctx, name) ?: return null
+        return try {
+            ptr.getString(0, "UTF-8")
+        } catch (_: Throwable) {
+            null
+        } finally {
+            mpv_free(ptr)
+        }
+    }
 
     companion object {
         val INSTANCE: MpvLibrary by lazy {
