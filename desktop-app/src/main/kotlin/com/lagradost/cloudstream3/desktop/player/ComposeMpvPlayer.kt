@@ -9,8 +9,13 @@ import com.lagradost.player.impl.PlayerLinkHandler
 import kotlinx.coroutines.delay
 import java.awt.Canvas
 import java.awt.Color
+import java.awt.KeyEventDispatcher
 import java.awt.event.*
 import java.io.File
+
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.withContext
 
 @Composable
 fun ComposeMpvPlayer(
@@ -32,48 +37,56 @@ fun ComposeMpvPlayer(
     var lastSpeed by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(mpvHandle) {
-        val h = mpvHandle
-        if (h != null) {
+        val h = mpvHandle ?: return@LaunchedEffect
+        withContext(Dispatchers.IO) {
             val startTime = System.currentTimeMillis()
-            while (true) {
+            while (isActive) {
                 // Persist playback speed whenever the user changes it (e.g. via mpv's [ ] keys)
-                val speedStr = MpvLibrary.INSTANCE.mpv_get_property_string(h, "speed")
+                val speedStr = MpvLibrary.INSTANCE.getProperty(h, "speed")
                 if (speedStr != null && speedStr != lastSpeed) {
                     lastSpeed = speedStr
                     com.lagradost.common.storage.DesktopDataStore.setKey(PlayerConfig.PREF_SPEED, speedStr)
                 }
                 // Check if playback has started and track position
-                val posStr = MpvLibrary.INSTANCE.mpv_get_property_string(h, "time-pos")
+                val posStr = MpvLibrary.INSTANCE.getProperty(h, "time-pos")
                 val pos = posStr?.toDoubleOrNull()
 
-                val durStr = MpvLibrary.INSTANCE.mpv_get_property_string(h, "duration")
+                val durStr = MpvLibrary.INSTANCE.getProperty(h, "duration")
                 val dur = durStr?.toDoubleOrNull()
 
                 if (pos != null && pos > 0.0) {
                     if (!hasEverPlayed) {
                         hasEverPlayed = true
-                        onPlaybackReady()
+                        withContext(Dispatchers.Main) {
+                            onPlaybackReady()
+                        }
                     }
                     if (dur != null && dur > 0.0) {
-                        onPositionChange((pos * 1000).toLong(), (dur * 1000).toLong())
+                        withContext(Dispatchers.Main) {
+                            onPositionChange((pos * 1000).toLong(), (dur * 1000).toLong())
+                        }
                     }
                 }
 
                 // Check fullscreen state
-                val fsStr = MpvLibrary.INSTANCE.mpv_get_property_string(h, "fullscreen")
+                val fsStr = MpvLibrary.INSTANCE.getProperty(h, "fullscreen")
                 val isFs = fsStr == "yes"
                 if (isFs != lastFullscreenState) {
                     lastFullscreenState = isFs
-                    onFullscreenToggle(isFs)
+                    withContext(Dispatchers.Main) {
+                        onFullscreenToggle(isFs)
+                    }
                 }
 
                 // Check for completion
-                val eofStr = MpvLibrary.INSTANCE.mpv_get_property_string(h, "eof-reached")
+                val eofStr = MpvLibrary.INSTANCE.getProperty(h, "eof-reached")
                 if (eofStr == "yes") {
-                    if (hasEverPlayed) {
-                        onFinished()
-                    } else {
-                        onPlaybackError("Stream failed to load or instantly ended.")
+                    withContext(Dispatchers.Main) {
+                        if (hasEverPlayed) {
+                            onFinished()
+                        } else {
+                            onPlaybackError("Stream failed to load or instantly ended.")
+                        }
                     }
                     break
                 }
@@ -85,7 +98,9 @@ fun ComposeMpvPlayer(
                 val timeoutMs = maxOf(userTimeout, 45000L)
                 if (!hasEverPlayed && System.currentTimeMillis() - startTime > timeoutMs) {
                     com.lagradost.common.logging.AppLogger.e("MPV timeout reached while buffering")
-                    onPlaybackError("Connection timed out. The stream might be dead.")
+                    withContext(Dispatchers.Main) {
+                        onPlaybackError("Connection timed out. The stream might be dead.")
+                    }
                     break
                 }
 
@@ -130,8 +145,9 @@ fun ComposeMpvPlayer(
 
                 val isLinux = !isWindows && System.getProperty("os.name").lowercase().let { it.contains("nix") || it.contains("nux") }
                 if (isLinux) {
-                    // Under Wayland / Xwayland, allow MPV to try x11egl, x11vk, or auto fallback
-                    lib.mpv_set_option_string(handle, "gpu-context", "x11egl,x11vk,auto")
+                    // Use robust OpenGL/EGL backend on Linux to avoid experimental Vulkan swapchain stalls on seek
+                    lib.mpv_set_option_string(handle, "gpu-api", "opengl,auto")
+                    lib.mpv_set_option_string(handle, "gpu-context", "x11egl,x11,auto")
                 }
 
                 // Apply User Settings & Logging
@@ -176,11 +192,8 @@ fun ComposeMpvPlayer(
                 when (validated.streamKind) {
                     PlayerLinkHandler.StreamKind.HLS -> {
                         lib.mpv_set_option_string(handle, "hls-bitrate", "max")
-                        lib.mpv_set_option_string(handle, "demuxer-lavf-o-append", "reconnect=1,reconnect_streamed=1,reconnect_on_http_error=403,404,429,500,503")
                     }
-                    PlayerLinkHandler.StreamKind.DASH -> {
-                        lib.mpv_set_option_string(handle, "demuxer-lavf-o-append", "reconnect=1,reconnect_streamed=1")
-                    }
+                    PlayerLinkHandler.StreamKind.DASH -> {}
                     else -> {}
                 }
 
@@ -205,7 +218,7 @@ fun ComposeMpvPlayer(
                 }
 
                 // Headers & Config (We explicitly pass emptyList for subtitles to prevent blocking)
-                val mpvConfig = PlayerLinkHandler.writeMpvConfig(validated.headers, emptyList(), validated.audioTracks)
+                val mpvConfig = PlayerLinkHandler.writeMpvConfig(validated.headers, emptyList(), validated.audioTracks, validated.streamKind)
                 lib.mpv_set_option_string(handle, "include", mpvConfig.absolutePath.replace("\\", "/"))
 
                 val headerArgs = PlayerLinkHandler.buildHeadersCliArg(validated.headers)
@@ -216,6 +229,7 @@ fun ComposeMpvPlayer(
                     }
                 }
 
+                lib.mpv_set_option_string(handle, "script-opts", "osc-seekbarkeyframes=yes")
                 com.lagradost.common.logging.AppLogger.i("Initializing embedded MPV for URL: ${validated.url}")
                 lib.mpv_initialize(handle)
 
@@ -226,16 +240,42 @@ fun ComposeMpvPlayer(
                 }
 
                 val safeUrl = urlTarget.replace("\\", "/")
-                lib.mpv_command_string(handle, "loadfile \"$safeUrl\"")
+                sendMpvCommand(handle, "loadfile \"$safeUrl\"")
 
-                // Load subtitles asynchronously to prevent MPV from blocking the video stream
-                // downloading 15+ subtitles sequentially (which causes video server timeouts).
+                // Pre-download subtitles to local disk asynchronously so MPV reads local files
+                // instead of opening 15+ competing HTTP subtitle demuxers that stall seeking.
                 kotlin.concurrent.thread(isDaemon = true) {
-                    Thread.sleep(1000)
-                    finalSubtitles.forEach { sub ->
-                        val escapedSub = sub.url.replace("\\", "\\\\").replace("\"", "\\\"")
-                        val escapedTitle = sub.lang.replace("\\", "\\\\").replace("\"", "\\\"")
-                        MpvLibrary.INSTANCE.mpv_command_string(handle, "sub-add \"$escapedSub\" auto \"$escapedTitle\"")
+                    val subDir = File(System.getProperty("java.io.tmpdir"), "cs_subs_${System.currentTimeMillis()}").apply { mkdirs() }
+                    subDir.deleteOnExit()
+
+                    finalSubtitles.forEachIndexed { index, sub ->
+                        try {
+                            val localFile = if (sub.url.startsWith("http://") || sub.url.startsWith("https://")) {
+                                val ext = when {
+                                    sub.url.contains(".vtt", ignoreCase = true) -> ".vtt"
+                                    sub.url.contains(".ass", ignoreCase = true) -> ".ass"
+                                    else -> ".srt"
+                                }
+                                val dest = File(subDir, "sub_${index}$ext")
+                                val req = okhttp3.Request.Builder().url(sub.url).build()
+                                val resp = com.lagradost.cloudstream3.app.baseClient.newCall(req).execute()
+                                if (resp.isSuccessful) {
+                                    val bytes = resp.body?.bytes()
+                                    if (bytes != null && bytes.isNotEmpty()) {
+                                        dest.writeBytes(bytes)
+                                        dest
+                                    } else null
+                                } else null
+                            } else {
+                                File(sub.url).takeIf { it.exists() }
+                            }
+
+                            if (localFile != null && localFile.exists()) {
+                                val safePath = localFile.absolutePath.replace("\\", "/")
+                                val escapedTitle = sub.lang.replace("\\", "\\\\").replace("\"", "\\\"")
+                                sendMpvCommand(handle, "sub-add \"$safePath\" auto \"$escapedTitle\"")
+                            }
+                        } catch (_: Throwable) {}
                     }
                 }
 
@@ -243,83 +283,85 @@ fun ComposeMpvPlayer(
                 val canvas = this
                 canvas.addMouseMotionListener(object : MouseMotionAdapter() {
                     override fun mouseMoved(e: MouseEvent) {
-                        mpvHandle?.let { h -> MpvLibrary.INSTANCE.mpv_command_string(h, "mouse ${e.x} ${e.y}") }
+                        sendMpvCommand(mpvHandle, "mouse ${e.x} ${e.y}")
                     }
                     override fun mouseDragged(e: MouseEvent) {
-                        mpvHandle?.let { h -> MpvLibrary.INSTANCE.mpv_command_string(h, "mouse ${e.x} ${e.y}") }
+                        sendMpvCommand(mpvHandle, "mouse ${e.x} ${e.y}")
                     }
                 })
 
                 canvas.addMouseListener(object : MouseAdapter() {
                     override fun mousePressed(e: MouseEvent) {
                         canvas.requestFocusInWindow()
-                        mpvHandle?.let { h ->
-                            if (e.clickCount == 2 && e.button == MouseEvent.BUTTON1) {
-                                val inOscArea = e.y > canvas.height - 130 || e.y < 60
-                                if (!inOscArea) {
-                                    MpvLibrary.INSTANCE.mpv_command_string(h, "cycle fullscreen")
-                                    return
-                                }
+                        val h = mpvHandle ?: return
+                        if (e.clickCount == 2 && e.button == MouseEvent.BUTTON1) {
+                            val inOscArea = e.y > canvas.height - 130 || e.y < 60
+                            if (!inOscArea) {
+                                sendMpvCommand(h, "cycle fullscreen")
+                                return
                             }
-                            MpvLibrary.INSTANCE.mpv_command_string(h, "mouse ${e.x} ${e.y}")
-                            val btn = when (e.button) {
-                                MouseEvent.BUTTON1 -> "MBTN_LEFT"
-                                MouseEvent.BUTTON2 -> "MBTN_MID"
-                                MouseEvent.BUTTON3 -> "MBTN_RIGHT"
-                                else -> return
-                            }
-                            MpvLibrary.INSTANCE.mpv_command_string(h, "keydown $btn")
                         }
+                        sendMpvCommand(h, "mouse ${e.x} ${e.y}")
+                        val btn = when (e.button) {
+                            MouseEvent.BUTTON1 -> "MBTN_LEFT"
+                            MouseEvent.BUTTON2 -> "MBTN_MID"
+                            MouseEvent.BUTTON3 -> "MBTN_RIGHT"
+                            else -> return
+                        }
+                        sendMpvCommand(h, "keydown $btn")
                     }
                     override fun mouseReleased(e: MouseEvent) {
-                        mpvHandle?.let { h ->
-                            val btn = when (e.button) {
-                                MouseEvent.BUTTON1 -> "MBTN_LEFT"
-                                MouseEvent.BUTTON2 -> "MBTN_MID"
-                                MouseEvent.BUTTON3 -> "MBTN_RIGHT"
-                                else -> return
-                            }
-                            MpvLibrary.INSTANCE.mpv_command_string(h, "keyup $btn")
+                        val h = mpvHandle ?: return
+                        val btn = when (e.button) {
+                            MouseEvent.BUTTON1 -> "MBTN_LEFT"
+                            MouseEvent.BUTTON2 -> "MBTN_MID"
+                            MouseEvent.BUTTON3 -> "MBTN_RIGHT"
+                            else -> return
                         }
+                        sendMpvCommand(h, "keyup $btn")
                     }
                 })
 
                 canvas.addMouseWheelListener { e ->
-                    mpvHandle?.let { h ->
-                        val key = if (e.wheelRotation < 0) "WHEEL_UP" else "WHEEL_DOWN"
-                        MpvLibrary.INSTANCE.mpv_command_string(h, "keypress $key")
-                    }
+                    val h = mpvHandle ?: return@addMouseWheelListener
+                    val key = if (e.wheelRotation < 0) "WHEEL_UP" else "WHEEL_DOWN"
+                    sendMpvCommand(h, "keypress $key")
                 }
 
-                java.awt.KeyboardFocusManager.getCurrentKeyboardFocusManager().addKeyEventDispatcher { e ->
-                    if (e.id == KeyEvent.KEY_PRESSED) {
-                        mpvHandle?.let { h ->
+                val keyDispatcher = KeyEventDispatcher { e ->
+                    val h = mpvHandle
+                    if (h != null) {
+                        if (e.id == KeyEvent.KEY_PRESSED) {
                             val mpvKey = awtKeyToMpv(e)
                             if (mpvKey?.contains("QUIT_OVERRIDE") == true) {
                                 onCloseRequest()
                             } else if (mpvKey == "ENTER") {
-                                MpvLibrary.INSTANCE.mpv_command_string(h, "cycle fullscreen")
+                                sendMpvCommand(h, "cycle fullscreen")
                             } else if (mpvKey != null) {
-                                // Prefer keypress for character keys if possible, but keydown works fine for all if exact.
-                                // Actually, mpv handles 'keydown' for all mapped string names.
-                                MpvLibrary.INSTANCE.mpv_command_string(h, "keydown $mpvKey")
+                                sendMpvCommand(h, "keydown $mpvKey")
                             }
-                        }
-                    } else if (e.id == KeyEvent.KEY_RELEASED) {
-                        mpvHandle?.let { h ->
+                        } else if (e.id == KeyEvent.KEY_RELEASED) {
                             val mpvKey = awtKeyToMpv(e)
                             if (mpvKey != null && !mpvKey.contains("QUIT_OVERRIDE") && mpvKey != "ENTER") {
-                                MpvLibrary.INSTANCE.mpv_command_string(h, "keyup $mpvKey")
+                                sendMpvCommand(h, "keyup $mpvKey")
                             }
                         }
                     }
                     false
                 }
+                activeKeyDispatcher = keyDispatcher
+                java.awt.KeyboardFocusManager.getCurrentKeyboardFocusManager().addKeyEventDispatcher(keyDispatcher)
 
                 canvas.requestFocusInWindow()
             }
 
+            private var activeKeyDispatcher: KeyEventDispatcher? = null
+
             override fun removeNotify() {
+                activeKeyDispatcher?.let {
+                    java.awt.KeyboardFocusManager.getCurrentKeyboardFocusManager().removeKeyEventDispatcher(it)
+                }
+                activeKeyDispatcher = null
                 mpvHandle?.let { MpvLibrary.INSTANCE.mpv_terminate_destroy(it) }
                 mpvHandle = null
                 super.removeNotify()
@@ -335,6 +377,19 @@ fun ComposeMpvPlayer(
         factory = { videoCanvas },
         modifier = modifier,
     )
+}
+
+private val mpvCommandExecutor = java.util.concurrent.Executors.newSingleThreadExecutor { runnable ->
+    Thread(runnable, "mpv-command-dispatcher").apply { isDaemon = true }
+}
+
+private fun sendMpvCommand(handle: com.sun.jna.Pointer?, cmd: String) {
+    if (handle == null) return
+    mpvCommandExecutor.execute {
+        try {
+            MpvLibrary.INSTANCE.mpv_command_string(handle, cmd)
+        } catch (_: Throwable) {}
+    }
 }
 
 private fun resolveMpvExecutable(isWindows: Boolean): File? {

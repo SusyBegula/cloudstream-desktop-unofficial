@@ -62,7 +62,21 @@ fun CloudstreamApp() {
                         animationSpec = androidx.compose.animation.core.tween(300),
                     ) { targetScreen ->
                         when (targetScreen) {
-                            is Screen.Details -> ComposeDetailsScreen(navController, targetScreen.provider, targetScreen.url, targetScreen.preloadedName, targetScreen.preloadedPoster, targetScreen.preloadedBg)
+                            is Screen.Details -> DesktopAppShell(
+                                navController = navController,
+                                title = targetScreen.preloadedName ?: "Details",
+                                showBack = true,
+                                onErrorLogs = { showErrorsDialog = true },
+                            ) {
+                                ComposeDetailsScreen(
+                                    navController = navController,
+                                    provider = targetScreen.provider,
+                                    url = targetScreen.url,
+                                    preloadedName = targetScreen.preloadedName,
+                                    preloadedPoster = targetScreen.preloadedPoster,
+                                    preloadedBg = targetScreen.preloadedBg,
+                                )
+                            }
 
                             is Screen.Home -> DesktopAppShell(
                                 navController = navController,
