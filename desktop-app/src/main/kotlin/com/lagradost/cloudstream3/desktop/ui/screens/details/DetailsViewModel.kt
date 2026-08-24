@@ -59,15 +59,18 @@ fun normalizeEpisodeList(episodes: List<Episode>) {
             }
         }
 
-        if (parsedSeason != null && parsedSeason > 0) {
+        if (ep.season != null && ep.season!! > 0) {
+            currentSeason = ep.season!!
+            if (parsedEpisode != null && parsedEpisode > 0 && (ep.episode == null || ep.episode == 0)) {
+                ep.episode = parsedEpisode
+            }
+            prevEpNumber = ep.episode ?: -1
+        } else if (parsedSeason != null && parsedSeason > 0) {
             ep.season = parsedSeason
             currentSeason = parsedSeason
             if (parsedEpisode != null && parsedEpisode > 0 && (ep.episode == null || ep.episode == 0)) {
                 ep.episode = parsedEpisode
             }
-            prevEpNumber = ep.episode ?: -1
-        } else if (ep.season != null && ep.season!! > 0) {
-            currentSeason = ep.season!!
             prevEpNumber = ep.episode ?: -1
         } else {
             val epNum = ep.episode
@@ -343,7 +346,7 @@ object GlobalDetailsCache {
                             com.lagradost.common.logging.AppLogger.e("Error preloading Season 1", e)
                         }
 
-                        // Apply Season 1 metadata to initial episodes
+                        // Apply Season 1 metadata to initial episodes (strictly only for Season 1)
                         val targetEpisodes = when (loaded) {
                             is TvSeriesLoadResponse -> loaded.episodes
                             is AnimeLoadResponse -> loaded.episodes.values.flatten()
@@ -352,6 +355,7 @@ object GlobalDetailsCache {
                         val s1Eps = showContext.cachedSeasons[1] ?: emptyList()
                         if (s1Eps.isNotEmpty()) {
                             for (ep in targetEpisodes) {
+                                if ((ep.season ?: 1) != 1) continue
                                 val epNum = ep.episode ?: continue
                                 if (epNum in 1..s1Eps.size) {
                                     val match = s1Eps.getOrNull(epNum - 1)
@@ -404,16 +408,39 @@ object GlobalDetailsCache {
 
         val tmdbApiKey = "e6333b32409e02a4a6eba6fb7ff866bb"
 
+        val hasMultipleSeasons = when (loaded) {
+            is TvSeriesLoadResponse -> loaded.episodes.mapNotNull { it.season }.distinct().size > 1
+            is AnimeLoadResponse -> loaded.episodes.values.flatten().mapNotNull { it.season }.distinct().size > 1
+            else -> false
+        }
+
+        fun resolveEpisodeTarget(ep: Episode): Pair<Int, Int>? {
+            val s = ep.season ?: 1
+            val epNum = ep.episode ?: return null
+
+            if (hasMultipleSeasons) {
+                val sRange = context.seasonRanges.find { it.seasonNum == s }
+                val epInSeason = if (sRange != null && epNum >= sRange.startAbsoluteEp && epNum <= sRange.endAbsoluteEp && sRange.startAbsoluteEp > 1) {
+                    epNum - sRange.startAbsoluteEp + 1
+                } else {
+                    epNum
+                }
+                return Pair(s, epInSeason)
+            } else {
+                if (context.seasonRanges.isNotEmpty()) {
+                    val r = context.seasonRanges.find { epNum in it.startAbsoluteEp..it.endAbsoluteEp }
+                    if (r != null) {
+                        return Pair(r.seasonNum, epNum - r.startAbsoluteEp + 1)
+                    }
+                }
+                return Pair(s, epNum)
+            }
+        }
+
         val seasonsToFetch = mutableSetOf<Int>()
         for (ep in visibleEpisodes) {
-            val s = ep.season ?: 1
-            val epNum = ep.episode ?: continue
-            val targetSeason = if (context.seasonRanges.isNotEmpty()) {
-                val r = context.seasonRanges.find { epNum in it.startAbsoluteEp..it.endAbsoluteEp }
-                r?.seasonNum ?: s
-            } else {
-                s
-            }
+            val target = resolveEpisodeTarget(ep) ?: continue
+            val targetSeason = target.first
             if (!context.cachedSeasons.containsKey(targetSeason)) {
                 seasonsToFetch.add(targetSeason)
             }
@@ -454,19 +481,8 @@ object GlobalDetailsCache {
 
         var anyUpdated = false
         for (ep in visibleEpisodes) {
-            val s = ep.season ?: 1
-            val epNum = ep.episode ?: continue
-
-            val (targetSeason, epInSeason) = if (context.seasonRanges.isNotEmpty()) {
-                val r = context.seasonRanges.find { epNum in it.startAbsoluteEp..it.endAbsoluteEp }
-                if (r != null) {
-                    Pair(r.seasonNum, epNum - r.startAbsoluteEp + 1)
-                } else {
-                    Pair(s, epNum)
-                }
-            } else {
-                Pair(s, epNum)
-            }
+            val target = resolveEpisodeTarget(ep) ?: continue
+            val (targetSeason, epInSeason) = target
 
             val seasonEps = context.cachedSeasons[targetSeason]
             val resolved = seasonEps?.find { it.episode == epInSeason }
