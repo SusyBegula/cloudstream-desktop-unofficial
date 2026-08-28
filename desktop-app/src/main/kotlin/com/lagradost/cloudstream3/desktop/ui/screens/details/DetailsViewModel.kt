@@ -162,7 +162,7 @@ object GlobalDetailsCache {
 
                 fun cleanTitle(s: String): String = s
                     .replace(Regex("""\s*\(\d{4}\).*"""), "")
-                    .replace(Regex("""\s*(?i)(dual audio|dubbed|subbed|720p|1080p|480p|2160p|webrip|web-dl|hdtv|bluray).*"""), "")
+                    .replace(Regex("""\s*(?i)(season\s*\d+|s\d+|dual audio|dubbed|subbed|720p|1080p|480p|2160p|webrip|web-dl|hdtv|bluray).*"""), "")
                     .replace(Regex("""\s*[\[\{].*"""), "")
                     .replace(":", " ")
                     .trim()
@@ -210,33 +210,47 @@ object GlobalDetailsCache {
                     val itemYear = yearStr.take(4).toIntOrNull()
                     val genreIds = item.optJSONArray("genre_ids")?.let { arr -> (0 until arr.length()).map { arr.getInt(it) } } ?: emptyList()
                     val isAnim = genreIds.contains(16) || item.optString("original_language") == "ja"
+                    val pop = item.optDouble("popularity", 0.0)
 
                     var score = 0
-                    if (normTitle == normClean || normTitle.replace("shippuuden", "shippuden") == normClean.replace("shippuuden", "shippuden")) {
-                        score += 100
+                    val isExact = normTitle == normClean ||
+                        normTitle.replace("shippuuden", "shippuden") == normClean.replace("shippuuden", "shippuden")
+
+                    if (isExact) {
+                        score += 300
+                    } else if (normTitle.startsWith(normClean) || normClean.startsWith(normTitle)) {
+                        score += 100 - minOf(kotlin.math.abs(normTitle.length - normClean.length) * 2, 60)
                     } else if (normTitle.contains(normClean) || normClean.contains(normTitle)) {
-                        score += 50
+                        score += 60 - minOf(kotlin.math.abs(normTitle.length - normClean.length) * 2, 40)
                     } else {
                         continue
                     }
 
-                    if (isLoadedTv && mediaType == "tv") score += 40
-                    if (!isLoadedTv && mediaType == "movie") score += 40
+                    if (isLoadedTv && mediaType == "tv") {
+                        score += 50
+                    } else if (!isLoadedTv && mediaType == "movie") {
+                        score += 50
+                    } else {
+                        score -= 30
+                    }
 
                     if (isLoadedAnime) {
-                        if (isAnim) score += 80 else score -= 100
+                        if (isAnim) score += 100 else score -= 150
                     } else {
-                        if (!isAnim) score += 30
+                        if (isAnim) score -= 120 else score += 30
                     }
 
                     if (loadedYear != null && itemYear != null) {
                         if (loadedYear == itemYear) {
-                            score += 80
+                            score += 50
                         } else {
                             val diff = kotlin.math.abs(loadedYear - itemYear)
-                            score -= minOf(diff * 5, 80)
+                            val maxPenalty = if (isExact && isLoadedTv) 30 else 60
+                            score -= minOf(diff * 4, maxPenalty)
                         }
                     }
+
+                    score += minOf(pop.toInt(), 50)
 
                     if (score > bestScore) {
                         bestScore = score
