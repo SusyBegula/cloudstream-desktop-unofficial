@@ -17,6 +17,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
@@ -24,6 +25,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.lagradost.cloudstream3.desktop.repo.DesktopRepositoryManager
 import com.lagradost.cloudstream3.desktop.ui.components.LocalDesktopTheme
+import com.lagradost.cloudstream3.desktop.ui.components.gamepadFocusable
 import com.lagradost.cloudstream3.desktop.ui.navigation.NavController
 import com.lagradost.cloudstream3.desktop.ui.navigation.Screen
 import com.lagradost.cloudstream3.desktop.utils.PlaywrightManager
@@ -146,7 +148,8 @@ private fun NavigationDock(
     Surface(
         modifier = Modifier
             .width(72.dp)
-            .fillMaxHeight(),
+            .fillMaxHeight()
+            .focusProperties { canFocus = false },
         color = MaterialTheme.colorScheme.background,
         shadowElevation = 0.dp,
         shape = RoundedCornerShape(0.dp),
@@ -246,7 +249,12 @@ private fun DockItem(
             .clip(RoundedCornerShape(12.dp))
             .background(bgColor)
             .hoverable(itemInteraction)
-            .clickable(onClick = onClick),
+            .clickable(
+                interactionSource = itemInteraction,
+                indication = null,
+                onClick = onClick,
+            )
+            .focusProperties { canFocus = false },
         contentAlignment = Alignment.Center,
     ) {
         Icon(icon, contentDescription = label, tint = iconTint, modifier = Modifier.size(24.dp))
@@ -296,7 +304,7 @@ private fun TopBar(
                         .size(38.dp)
                         .clip(CircleShape)
                         .background(theme.SurfaceElevated.copy(alpha = 0.5f))
-                        .clickable { onBack() },
+                        .gamepadFocusable(onClick = onBack),
                     contentAlignment = Alignment.Center,
                 ) {
                     Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = theme.TextPrimary, modifier = Modifier.size(20.dp))

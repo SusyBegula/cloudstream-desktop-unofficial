@@ -7,7 +7,9 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.hoverable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.interaction.collectIsHoveredAsState
+import com.lagradost.cloudstream3.desktop.ui.components.gamepadFocusable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -36,6 +38,7 @@ import com.lagradost.common.storage.WatchHistory
 import com.lagradost.player.impl.PlayerLinkHandler
 import com.lagradost.player.impl.VlcPlayer
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 private val vlcPlayer = VlcPlayer()
@@ -303,6 +306,20 @@ fun LinksModal(
         }
     }
 
+    val linksListState = androidx.compose.foundation.lazy.rememberLazyListState()
+    val rightStickY by com.lagradost.cloudstream3.desktop.controller.GamepadActionBridge.rightStickY.collectAsState()
+
+    LaunchedEffect(rightStickY) {
+        if (kotlin.math.abs(rightStickY) > 0.05f) {
+            while (isActive && kotlin.math.abs(com.lagradost.cloudstream3.desktop.controller.GamepadActionBridge.rightStickY.value) > 0.05f) {
+                val y = com.lagradost.cloudstream3.desktop.controller.GamepadActionBridge.rightStickY.value
+                val scrollDelta = y * 28f
+                linksListState.dispatchRawDelta(scrollDelta)
+                kotlinx.coroutines.delay(16)
+            }
+        }
+    }
+
     Surface(modifier = Modifier.fillMaxSize(), color = Color.Transparent) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
             Column(modifier = Modifier.widthIn(max = 700.dp).fillMaxHeight()) {
@@ -328,7 +345,7 @@ fun LinksModal(
                     }
                     IconButton(
                         onClick = onClose,
-                        modifier = Modifier.size(36.dp),
+                        modifier = Modifier.size(36.dp).gamepadFocusable(onClick = onClose),
                     ) {
                         Icon(
                             Icons.Default.Close,
@@ -369,6 +386,7 @@ fun LinksModal(
                 val currentDownloading = downloadsList.find { it.showUrl == history.showUrl && it.episodeId == history.episodeId }
 
                 LazyColumn(
+                    state = linksListState,
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp),
@@ -594,17 +612,19 @@ private fun StreamLinkCard(
 ) {
     val interaction = remember { MutableInteractionSource() }
     val hovered by interaction.collectIsHoveredAsState()
-    val scale by animateFloatAsState(if (hovered) 1.01f else 1f, tween(150), label = "linkScale")
+    val focused by interaction.collectIsFocusedAsState()
+    val isHighlighted = hovered || focused
+    val scale by animateFloatAsState(if (isHighlighted) 1.02f else 1f, tween(150), label = "linkScale")
 
     Surface(
         modifier = Modifier
             .fillMaxWidth()
             .scale(scale)
-            .hoverable(interaction),
+            .gamepadFocusable(interaction, onClick = onPlay),
         shape = RoundedCornerShape(12.dp),
-        color = if (isDefault) DesktopUi.AccentSoft.copy(alpha = 0.22f) else if (hovered) DesktopUi.SurfaceElevated else DesktopUi.SurfaceCard,
-        border = if (isDefault) BorderStroke(1.5.dp, DesktopUi.Accent.copy(alpha = 0.75f)) else null,
-        tonalElevation = if (hovered) 6.dp else 2.dp,
+        color = if (isDefault) DesktopUi.AccentSoft.copy(alpha = 0.22f) else if (isHighlighted) DesktopUi.SurfaceElevated else DesktopUi.SurfaceCard,
+        border = if (isDefault) BorderStroke(1.5.dp, DesktopUi.Accent.copy(alpha = 0.75f)) else if (focused) BorderStroke(1.5.dp, DesktopUi.Accent) else null,
+        tonalElevation = if (isHighlighted) 6.dp else 2.dp,
     ) {
         Row(
             modifier = Modifier

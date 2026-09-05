@@ -129,6 +129,9 @@ fun EmbeddedVideoPlayer(
                                     )
                                     DesktopDataStore.setLastWatched(updatedHistory)
                                 }
+                                if (com.lagradost.cloudstream3.desktop.controller.GamepadManager.playerConfig.value.rumbleOnFinish) {
+                                    com.lagradost.cloudstream3.desktop.controller.GamepadManager.vibrate(leftMotor = 0.6f, rightMotor = 0.6f, durationMs = 350)
+                                }
                                 isFinished = true
                             },
                             onFullscreenToggle = { fs ->
@@ -157,6 +160,9 @@ fun EmbeddedVideoPlayer(
                             onCloseRequest = {
                                 launchData.onClosed?.invoke()
                                 onClose()
+                            },
+                            onPlayNext = {
+                                launchData.nextEpisode?.onPlay?.invoke() ?: launchData.onPlayNext?.invoke()
                             },
                         )
                     }

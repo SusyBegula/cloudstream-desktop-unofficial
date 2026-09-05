@@ -38,6 +38,22 @@ fun CloudstreamApp() {
     var showErrorsDialog by remember { mutableStateOf(false) }
     var currentVideo by remember { mutableStateOf<VideoLaunchData?>(null) }
     val screen = navController.currentScreen
+    val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
+
+    androidx.compose.runtime.DisposableEffect(navController, focusManager) {
+        val uiHandler = com.lagradost.cloudstream3.desktop.controller.UiGamepadHandler(
+            navController = navController,
+            focusManagerProvider = { focusManager },
+        )
+        com.lagradost.cloudstream3.desktop.controller.GamepadInputRouter.start(uiHandler)
+        onDispose {
+            com.lagradost.cloudstream3.desktop.controller.GamepadInputRouter.stop()
+        }
+    }
+
+    androidx.compose.runtime.LaunchedEffect(currentVideo) {
+        com.lagradost.cloudstream3.desktop.controller.GamepadInputRouter.setPlayerActive(currentVideo != null)
+    }
 
     val isLightMode by com.lagradost.cloudstream3.desktop.ui.theme.AppearanceConfig.isLightMode.collectAsState()
     val themeAccent by com.lagradost.cloudstream3.desktop.ui.theme.AppearanceConfig.themeAccent.collectAsState()

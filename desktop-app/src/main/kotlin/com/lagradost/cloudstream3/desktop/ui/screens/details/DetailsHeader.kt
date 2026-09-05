@@ -29,6 +29,7 @@ import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import coil3.compose.SubcomposeAsyncImage
 import com.lagradost.cloudstream3.desktop.ui.components.DesktopUi
+import com.lagradost.cloudstream3.desktop.ui.components.gamepadFocusable
 import com.lagradost.cloudstream3.LoadResponse
 import com.lagradost.cloudstream3.MainAPI
 import com.lagradost.cloudstream3.fixUrlNull
@@ -162,23 +163,25 @@ fun DetailsMetadata(provider: MainAPI, data: LoadResponse, hazeState: HazeState)
                         // Bookmark button
                         val bookmarkId = "${provider.name}_${data.url.hashCode()}"
                         var isBookmarked by remember { mutableStateOf(DesktopDataStore.isBookmarked(bookmarkId)) }
+                        val toggleBookmark: () -> Unit = {
+                            if (isBookmarked) {
+                                DesktopDataStore.removeBookmark(bookmarkId)
+                            } else {
+                                DesktopDataStore.addBookmark(
+                                    DesktopBookmark(
+                                        id = bookmarkId,
+                                        name = data.name,
+                                        url = data.url,
+                                        apiName = provider.name,
+                                        posterUrl = data.posterUrl,
+                                    ),
+                                )
+                            }
+                            isBookmarked = !isBookmarked
+                        }
                         IconButton(
-                            onClick = {
-                                if (isBookmarked) {
-                                    DesktopDataStore.removeBookmark(bookmarkId)
-                                } else {
-                                    DesktopDataStore.addBookmark(
-                                        DesktopBookmark(
-                                            id = bookmarkId,
-                                            name = data.name,
-                                            url = data.url,
-                                            apiName = provider.name,
-                                            posterUrl = data.posterUrl,
-                                        ),
-                                    )
-                                }
-                                isBookmarked = !isBookmarked
-                            },
+                            onClick = toggleBookmark,
+                            modifier = Modifier.gamepadFocusable(onClick = toggleBookmark),
                         ) {
                             Icon(
                                 if (isBookmarked) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
@@ -242,7 +245,12 @@ fun DetailsMetadata(provider: MainAPI, data: LoadResponse, hazeState: HazeState)
                     },
                 ) {
                     items(data.actors!!) { actor ->
-                        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(110.dp)) {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            modifier = Modifier
+                                .width(110.dp)
+                                .gamepadFocusable(),
+                        ) {
                             CastAvatar(
                                 name = actor.actor.name,
                                 imageUrl = provider.fixUrlNull(actor.actor.image),

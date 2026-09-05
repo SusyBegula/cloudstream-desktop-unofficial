@@ -85,7 +85,10 @@ fun main() {
             position = androidx.compose.ui.window.WindowPosition.Aligned(androidx.compose.ui.Alignment.Center),
         )
         Window(
-            onCloseRequest = ::exitApplication,
+            onCloseRequest = {
+                com.lagradost.cloudstream3.desktop.controller.GamepadManager.shutdown()
+                exitApplication()
+            },
             title = "CloudStream - Unofficial Desktop Client (Pre-Alpha)",
             state = state,
             icon = androidx.compose.ui.res.painterResource("logo_ui.png"),

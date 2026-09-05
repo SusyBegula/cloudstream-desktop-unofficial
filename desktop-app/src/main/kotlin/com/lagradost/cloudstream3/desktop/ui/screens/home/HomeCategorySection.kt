@@ -11,6 +11,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.unit.dp
 import com.lagradost.cloudstream3.HomePageResponse
 import com.lagradost.cloudstream3.MainAPI
@@ -35,6 +36,8 @@ fun HomeCategorySection(
     provider: MainAPI,
     isFirstPage: Boolean = false,
     parentScope: CoroutineScope,
+    heroFocusRequester: FocusRequester? = null,
+    searchFocusRequester: FocusRequester? = null,
     afterHeroContent: @Composable () -> Unit = {},
     onViewAll: (MainAPI, String, List<SearchResponse>) -> Unit,
     onItemClick: (MainAPI, SearchResponse, String?) -> Unit,
@@ -110,6 +113,8 @@ fun HomeCategorySection(
                     HomeHeroCarousel(
                         items = section.list,
                         provider = provider,
+                        heroFocusRequester = heroFocusRequester,
+                        searchFocusRequester = searchFocusRequester,
                         onItemClick = { item, backdrop -> onItemClick(provider, item, backdrop) },
                     )
                     afterHeroContent()

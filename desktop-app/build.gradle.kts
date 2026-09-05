@@ -68,6 +68,12 @@ dependencies {
     // JNA for MPV
     implementation("net.java.dev.jna:jna:5.14.0")
 
+    // Gamepad Controller (Jamepad / SDL2 GameController)
+    implementation("com.badlogicgames.gdx:gdx-jnigen-loader:2.5.1")
+    implementation("com.badlogicgames.jamepad:jamepad:2.0.14.1") {
+        exclude(group = "com.badlogicgames.gdx", module = "gdx-jnigen-loader")
+    }
+
     // Compose Desktop UI
     implementation(compose.desktop.currentOs)
     implementation(compose.material3) // material3 already includes core icons

@@ -17,6 +17,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
@@ -30,6 +33,7 @@ import com.lagradost.cloudstream3.MainAPI
 import com.lagradost.cloudstream3.SearchResponse
 import com.lagradost.cloudstream3.desktop.ui.components.DesktopUi
 import com.lagradost.cloudstream3.desktop.ui.components.LocalDesktopTheme
+import com.lagradost.cloudstream3.desktop.ui.components.gamepadFocusable
 import com.lagradost.cloudstream3.fixUrlNull
 import com.lagradost.common.logging.AppLogger
 import kotlinx.coroutines.Dispatchers
@@ -60,7 +64,13 @@ fun cleanHeroTitle(raw: String): String {
 
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
-fun HomeHeroCarousel(items: List<SearchResponse>, provider: MainAPI?, onItemClick: (SearchResponse, String?) -> Unit) {
+fun HomeHeroCarousel(
+    items: List<SearchResponse>,
+    provider: MainAPI?,
+    heroFocusRequester: FocusRequester? = null,
+    searchFocusRequester: FocusRequester? = null,
+    onItemClick: (SearchResponse, String?) -> Unit,
+) {
     if (items.isEmpty()) return
 
     val displayItems = items.take(10)
@@ -410,6 +420,14 @@ fun HomeHeroCarousel(items: List<SearchResponse>, provider: MainAPI?, onItemClic
 
                         Button(
                             onClick = { onItemClick(item, meta?.backdropUrl) },
+                            modifier = Modifier
+                                .let { if (heroFocusRequester != null) it.focusRequester(heroFocusRequester) else it }
+                                .focusProperties {
+                                    if (searchFocusRequester != null) {
+                                        up = searchFocusRequester
+                                    }
+                                }
+                                .gamepadFocusable(onClick = { onItemClick(item, meta?.backdropUrl) }),
                             colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color.Black),
                             shape = RoundedCornerShape(24.dp),
                             contentPadding = PaddingValues(horizontal = 32.dp, vertical = 16.dp),
@@ -433,7 +451,11 @@ fun HomeHeroCarousel(items: List<SearchResponse>, provider: MainAPI?, onItemClic
                     )
                 }
             },
-            modifier = Modifier.align(Alignment.CenterStart).padding(start = 16.dp).background(Color.Black.copy(alpha = 0.3f), CircleShape),
+            modifier = Modifier
+                .align(Alignment.CenterStart)
+                .padding(start = 16.dp)
+                .background(Color.Black.copy(alpha = 0.3f), CircleShape)
+                .focusProperties { canFocus = false },
         ) {
             Icon(Icons.Default.KeyboardArrowLeft, contentDescription = "Previous", tint = Color.White, modifier = Modifier.size(32.dp))
         }
@@ -447,7 +469,11 @@ fun HomeHeroCarousel(items: List<SearchResponse>, provider: MainAPI?, onItemClic
                     )
                 }
             },
-            modifier = Modifier.align(Alignment.CenterEnd).padding(end = 16.dp).background(Color.Black.copy(alpha = 0.3f), CircleShape),
+            modifier = Modifier
+                .align(Alignment.CenterEnd)
+                .padding(end = 16.dp)
+                .background(Color.Black.copy(alpha = 0.3f), CircleShape)
+                .focusProperties { canFocus = false },
         ) {
             Icon(Icons.Default.KeyboardArrowRight, contentDescription = "Next", tint = Color.White, modifier = Modifier.size(32.dp))
         }

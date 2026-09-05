@@ -29,12 +29,100 @@ fun ComposeMpvPlayer(
     onFullscreenToggle: (Boolean) -> Unit,
     onPositionChange: (Long, Long) -> Unit,
     onCloseRequest: () -> Unit,
+    onPlayNext: (() -> Unit)? = null,
     modifier: Modifier = Modifier.fillMaxSize(),
 ) {
     var mpvHandle by remember { mutableStateOf<com.sun.jna.Pointer?>(null) }
     var hasEverPlayed by remember { mutableStateOf(false) }
     var lastFullscreenState by remember { mutableStateOf(false) }
     var lastSpeed by remember { mutableStateOf<String?>(null) }
+
+    DisposableEffect(mpvHandle) {
+        val h = mpvHandle
+        if (h != null) {
+            var speedIndex = 0
+            val speedOptions = floatArrayOf(1.0f, 1.25f, 1.5f, 1.75f, 2.0f)
+
+            var aspectIndex = 0
+            val aspectOptions = listOf(
+                Triple("-1", "0.0", "Fit (Original)"),
+                Triple("-1", "1.0", "Zoom / Crop to Fill"),
+                Triple("16:9", "0.0", "Stretch (16:9)"),
+                Triple("4:3", "0.0", "4:3 Standard"),
+                Triple("2.35:1", "0.0", "2.35:1 Cinema Wide"),
+            )
+
+            val cb = object : com.lagradost.cloudstream3.desktop.controller.PlayerControllerCallback {
+                override fun onPlayPause() {
+                    sendMpvCommand(h, "cycle pause")
+                }
+
+                override fun onSeekRelative(seconds: Int) {
+                    sendMpvCommand(h, "seek $seconds relative")
+                }
+
+                override fun onVolumeChange(deltaPercent: Int) {
+                    sendMpvCommand(h, "add volume $deltaPercent")
+                }
+
+                override fun onCycleSubtitles() {
+                    sendMpvCommand(h, "cycle sub")
+                }
+
+                override fun onCycleAudio() {
+                    sendMpvCommand(h, "cycle audio")
+                }
+
+                override fun onToggleOsd() {
+                    sendMpvCommand(h, "show-progress")
+                    sendMpvCommand(h, "script-binding osc/visibility")
+                }
+
+                override fun onToggleFullscreen() {
+                    sendMpvCommand(h, "cycle fullscreen")
+                }
+
+                override fun onCycleSpeed() {
+                    speedIndex = (speedIndex + 1) % speedOptions.size
+                    val newSpeed = speedOptions[speedIndex]
+                    sendMpvCommand(h, "set speed $newSpeed")
+                    sendMpvCommand(h, "show-text \"Speed: ${newSpeed}x\" 2000")
+                }
+
+                override fun onSeekStart() {
+                    sendMpvCommand(h, "seek 0 absolute")
+                    sendMpvCommand(h, "show-text \"Seek: Beginning (0:00)\" 2000")
+                }
+
+                override fun onSeekEnd() {
+                    sendMpvCommand(h, "seek 99 absolute-percent")
+                    sendMpvCommand(h, "show-text \"Seek: End\" 2000")
+                }
+
+                override fun onCycleAspectRatio() {
+                    aspectIndex = (aspectIndex + 1) % aspectOptions.size
+                    val (ratio, pan, label) = aspectOptions[aspectIndex]
+                    sendMpvCommand(h, "set video-aspect-override $ratio")
+                    sendMpvCommand(h, "set panscan $pan")
+                    sendMpvCommand(h, "show-text \"Aspect: $label\" 2000")
+                }
+
+                override fun onExitPlayer() {
+                    onCloseRequest()
+                }
+
+                override fun onSetSpeed(speed: Float) {
+                    sendMpvCommand(h, "set speed $speed")
+                }
+            }
+            com.lagradost.cloudstream3.desktop.controller.PlayerGamepadHandler.registerCallback(cb)
+            onDispose {
+                com.lagradost.cloudstream3.desktop.controller.PlayerGamepadHandler.unregisterCallback(cb)
+            }
+        } else {
+            onDispose {}
+        }
+    }
 
     LaunchedEffect(mpvHandle) {
         val h = mpvHandle ?: return@LaunchedEffect

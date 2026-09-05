@@ -33,6 +33,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import kotlinx.coroutines.isActive
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
@@ -40,6 +41,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.desktop.ui.components.DesktopUi
+import com.lagradost.cloudstream3.desktop.ui.components.gamepadFocusable
 import com.lagradost.cloudstream3.desktop.ui.navigation.NavController
 import com.lagradost.cloudstream3.desktop.ui.screens.details.*
 import com.lagradost.player.impl.PlayerLinkHandler
@@ -218,8 +220,16 @@ fun DetailsContent(
     var episodeSearchQuery by remember(data.url) { mutableStateOf("") }
     var isSearchActive by remember(data.url) { mutableStateOf(false) }
     val searchFocusRequester = remember { FocusRequester() }
+    val primaryFocusRequester = remember { FocusRequester() }
     val coroutineScope = rememberCoroutineScope()
     val pageSize = 6
+
+    LaunchedEffect(data.url) {
+        kotlinx.coroutines.delay(150)
+        try {
+            primaryFocusRequester.requestFocus()
+        } catch (_: Throwable) {}
+    }
 
     val allEpisodes = remember(data, selectedSeason, selectedDub, isSortAscending, episodeSearchQuery, seasons, enrichmentTrigger) {
         val rawList = when (data) {
@@ -264,6 +274,18 @@ fun DetailsContent(
             val start = ((page - 1) * pageSize).coerceIn(0, allEpisodes.size)
             val end = (start + pageSize).coerceIn(0, allEpisodes.size)
             allEpisodes.subList(start, end)
+        }
+    }
+
+    val rightStickY by com.lagradost.cloudstream3.desktop.controller.GamepadActionBridge.rightStickY.collectAsState()
+    LaunchedEffect(rightStickY) {
+        if (kotlin.math.abs(rightStickY) > 0.05f) {
+            while (isActive && kotlin.math.abs(com.lagradost.cloudstream3.desktop.controller.GamepadActionBridge.rightStickY.value) > 0.05f) {
+                val y = com.lagradost.cloudstream3.desktop.controller.GamepadActionBridge.rightStickY.value
+                val scrollDelta = y * 28f
+                scrollState.dispatchRawDelta(scrollDelta)
+                kotlinx.coroutines.delay(16)
+            }
         }
     }
 
@@ -327,7 +349,11 @@ fun DetailsContent(
                                             onClick = {
                                                 navigateToPlay(provider, data, movieEp, onPlay)
                                             },
-                                            modifier = Modifier.weight(1f).fillMaxHeight(),
+                                            modifier = Modifier
+                                                .weight(1f)
+                                                .fillMaxHeight()
+                                                .focusRequester(primaryFocusRequester)
+                                                .gamepadFocusable(onClick = { navigateToPlay(provider, data, movieEp, onPlay) }),
                                             shape = RoundedCornerShape(8.dp),
                                         ) {
                                             Icon(Icons.Default.PlayArrow, contentDescription = "Play")
@@ -342,7 +368,9 @@ fun DetailsContent(
                                             onClick = {
                                                 navigateToPlay(provider, data, movieEp, onPlay, autoPlay = false)
                                             },
-                                            modifier = Modifier.fillMaxHeight(),
+                                            modifier = Modifier
+                                                .fillMaxHeight()
+                                                .gamepadFocusable(onClick = { navigateToPlay(provider, data, movieEp, onPlay, autoPlay = false) }),
                                             shape = RoundedCornerShape(8.dp),
                                         ) {
                                             if (isMovieDownloaded) {
@@ -371,7 +399,17 @@ fun DetailsContent(
                                             }
                                             navigateToPlay(provider, data, ep, onPlay)
                                         },
-                                        modifier = Modifier.fillMaxWidth().height(56.dp),
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .height(56.dp)
+                                            .focusRequester(primaryFocusRequester)
+                                            .gamepadFocusable(onClick = {
+                                                val ep = provider.newEpisode(data.dataUrl) {
+                                                    name = data.name
+                                                    posterUrl = data.posterUrl
+                                                }
+                                                navigateToPlay(provider, data, ep, onPlay)
+                                            }),
                                         shape = RoundedCornerShape(8.dp),
                                         colors = ButtonDefaults.buttonColors(containerColor = Color.Red),
                                     ) {
@@ -425,7 +463,14 @@ fun DetailsContent(
                                                     val ep = resumeEp ?: data.episodes.firstOrNull()
                                                     if (ep != null) navigateToPlay(provider, data, ep, onPlay)
                                                 },
-                                                modifier = Modifier.weight(1f).height(56.dp),
+                                                modifier = Modifier
+                                                    .weight(1f)
+                                                    .height(56.dp)
+                                                    .focusRequester(primaryFocusRequester)
+                                                    .gamepadFocusable(onClick = {
+                                                        val ep = resumeEp ?: data.episodes.firstOrNull()
+                                                        if (ep != null) navigateToPlay(provider, data, ep, onPlay)
+                                                    }),
                                                 shape = RoundedCornerShape(8.dp),
                                             ) {
                                                 Icon(Icons.Default.PlayArrow, contentDescription = "Continue Watching", tint = MaterialTheme.colorScheme.onPrimary)
@@ -435,7 +480,10 @@ fun DetailsContent(
                                             if (nextEp != null) {
                                                 OutlinedButton(
                                                     onClick = { navigateToPlay(provider, data, nextEp, onPlay) },
-                                                    modifier = Modifier.weight(1f).height(56.dp),
+                                                    modifier = Modifier
+                                                        .weight(1f)
+                                                        .height(56.dp)
+                                                        .gamepadFocusable(onClick = { navigateToPlay(provider, data, nextEp, onPlay) }),
                                                     shape = RoundedCornerShape(8.dp),
                                                 ) {
                                                     Icon(Icons.Default.SkipNext, contentDescription = "Play Next", modifier = Modifier.size(18.dp))
@@ -485,6 +533,7 @@ fun DetailsContent(
                                         isSortAscending = isSortAscending,
                                         onToggleSort = { isSortAscending = !isSortAscending },
                                         searchFocusRequester = searchFocusRequester,
+                                        primaryFocusRequester = if (latestHistory == null) primaryFocusRequester else null,
                                     )
                                     Spacer(modifier = Modifier.height(16.dp))
                                 }
@@ -520,7 +569,14 @@ fun DetailsContent(
                                                     val ep = resumeEp ?: allAnimeEpisodes.firstOrNull()
                                                     if (ep != null) navigateToPlay(provider, data, ep, onPlay)
                                                 },
-                                                modifier = Modifier.weight(1f).height(56.dp),
+                                                modifier = Modifier
+                                                    .weight(1f)
+                                                    .height(56.dp)
+                                                    .focusRequester(primaryFocusRequester)
+                                                    .gamepadFocusable(onClick = {
+                                                        val ep = resumeEp ?: allAnimeEpisodes.firstOrNull()
+                                                        if (ep != null) navigateToPlay(provider, data, ep, onPlay)
+                                                    }),
                                                 shape = RoundedCornerShape(8.dp),
                                             ) {
                                                 Icon(Icons.Default.PlayArrow, contentDescription = "Continue Watching", tint = MaterialTheme.colorScheme.onPrimary)
@@ -530,7 +586,7 @@ fun DetailsContent(
                                             if (nextEp != null) {
                                                 OutlinedButton(
                                                     onClick = { navigateToPlay(provider, data, nextEp, onPlay) },
-                                                    modifier = Modifier.weight(1f).height(56.dp),
+                                                    modifier = Modifier.weight(1f).height(56.dp).gamepadFocusable(onClick = { navigateToPlay(provider, data, nextEp, onPlay) }),
                                                     shape = RoundedCornerShape(8.dp),
                                                 ) {
                                                     Icon(Icons.Default.SkipNext, contentDescription = "Play Next", modifier = Modifier.size(18.dp))
@@ -665,6 +721,7 @@ private fun EpisodeToolbar(
     isSortAscending: Boolean,
     onToggleSort: () -> Unit,
     searchFocusRequester: FocusRequester,
+    primaryFocusRequester: FocusRequester? = null,
 ) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
@@ -685,6 +742,7 @@ private fun EpisodeToolbar(
                             onClick = { isDubMenuOpen = true },
                             shape = RoundedCornerShape(12.dp),
                             colors = ButtonDefaults.filledTonalButtonColors(containerColor = DesktopUi.SurfaceElevated),
+                            modifier = Modifier.gamepadFocusable(onClick = { isDubMenuOpen = true }),
                         ) {
                             Text(selectedDub?.name ?: "Dubs", fontWeight = FontWeight.Bold, color = DesktopUi.TextPrimary)
                             Spacer(modifier = Modifier.width(4.dp))
@@ -708,6 +766,10 @@ private fun EpisodeToolbar(
                                         onSelectDub(dub)
                                         isDubMenuOpen = false
                                     },
+                                    modifier = Modifier.gamepadFocusable(onClick = {
+                                        onSelectDub(dub)
+                                        isDubMenuOpen = false
+                                    }),
                                 )
                             }
                         }
@@ -725,6 +787,9 @@ private fun EpisodeToolbar(
                     Box {
                         FilledTonalButton(
                             onClick = { isSeasonMenuOpen = true },
+                            modifier = Modifier
+                                .run { if (primaryFocusRequester != null) this.focusRequester(primaryFocusRequester) else this }
+                                .gamepadFocusable(onClick = { isSeasonMenuOpen = true }),
                             shape = RoundedCornerShape(12.dp),
                             colors = ButtonDefaults.filledTonalButtonColors(containerColor = DesktopUi.SurfaceElevated),
                         ) {
@@ -753,6 +818,10 @@ private fun EpisodeToolbar(
                                         onSelectSeason(season)
                                         isSeasonMenuOpen = false
                                     },
+                                    modifier = Modifier.gamepadFocusable(onClick = {
+                                        onSelectSeason(season)
+                                        isSeasonMenuOpen = false
+                                    }),
                                 )
                             }
                         }
@@ -763,7 +832,9 @@ private fun EpisodeToolbar(
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         color = DesktopUi.TextPrimary,
-                        modifier = Modifier.padding(start = 4.dp),
+                        modifier = Modifier
+                            .padding(start = 4.dp)
+                            .run { if (primaryFocusRequester != null) this.focusRequester(primaryFocusRequester).gamepadFocusable() else this },
                     )
                 }
             }
@@ -801,7 +872,7 @@ private fun EpisodeToolbar(
                     IconButton(
                         onClick = { onPageChange(currentPage - 1) },
                         enabled = currentPage > 1,
-                        modifier = Modifier.size(28.dp),
+                        modifier = Modifier.size(28.dp).gamepadFocusable(onClick = { onPageChange(currentPage - 1) }),
                     ) {
                         Text(
                             "‹",
@@ -820,7 +891,7 @@ private fun EpisodeToolbar(
                     IconButton(
                         onClick = { onPageChange(currentPage + 1) },
                         enabled = currentPage < totalPages,
-                        modifier = Modifier.size(28.dp),
+                        modifier = Modifier.size(28.dp).gamepadFocusable(onClick = { onPageChange(currentPage + 1) }),
                     ) {
                         Text(
                             "›",
@@ -832,17 +903,24 @@ private fun EpisodeToolbar(
                 }
             }
 
-            IconButton(onClick = {
+            val toggleSearch: () -> Unit = {
                 onSearchActiveChange(!isSearchActive)
                 if (isSearchActive) onSearchQueryChange("")
-            }) {
+            }
+            IconButton(
+                onClick = toggleSearch,
+                modifier = Modifier.gamepadFocusable(onClick = toggleSearch),
+            ) {
                 Icon(
                     if (isSearchActive) Icons.Default.Close else Icons.Default.Search,
                     contentDescription = if (isSearchActive) "Close search" else "Search episodes",
                     tint = if (isSearchActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
                 )
             }
-            TextButton(onClick = onToggleSort) {
+            TextButton(
+                onClick = onToggleSort,
+                modifier = Modifier.gamepadFocusable(onClick = onToggleSort),
+            ) {
                 Text(
                     text = if (isSortAscending) "Sort ▼" else "Sort ▲",
                     style = MaterialTheme.typography.titleMedium,
@@ -895,6 +973,7 @@ fun PaginationControls(
                     disabledContainerColor = DesktopUi.SurfaceElevated.copy(alpha = 0.4f),
                     disabledContentColor = DesktopUi.TextMuted.copy(alpha = 0.4f),
                 ),
+                modifier = Modifier.gamepadFocusable(onClick = { onPageChange(currentPage - 1) }),
             ) {
                 Text("‹ Prev", fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
             }
@@ -941,6 +1020,7 @@ fun PaginationControls(
                                 containerColor = DesktopUi.Accent,
                                 contentColor = Color.White,
                             ),
+                            modifier = Modifier.gamepadFocusable(),
                         ) {
                             Text(
                                 text = "$page",
@@ -957,6 +1037,7 @@ fun PaginationControls(
                                 containerColor = DesktopUi.SurfaceElevated,
                                 contentColor = DesktopUi.TextPrimary,
                             ),
+                            modifier = Modifier.gamepadFocusable(onClick = { onPageChange(page) }),
                         ) {
                             Text(
                                 text = "$page",
@@ -980,6 +1061,7 @@ fun PaginationControls(
                     disabledContainerColor = DesktopUi.SurfaceElevated.copy(alpha = 0.4f),
                     disabledContentColor = DesktopUi.TextMuted.copy(alpha = 0.4f),
                 ),
+                modifier = Modifier.gamepadFocusable(onClick = { onPageChange(currentPage + 1) }),
             ) {
                 Text("Next ›", fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
             }

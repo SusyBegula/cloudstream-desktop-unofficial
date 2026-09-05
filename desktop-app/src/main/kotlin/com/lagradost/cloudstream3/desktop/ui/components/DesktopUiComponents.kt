@@ -4,9 +4,13 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.hoverable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.interaction.collectIsHoveredAsState
+import com.lagradost.cloudstream3.desktop.controller.GamepadActionBridge
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.LazyRow
@@ -20,6 +24,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
@@ -213,7 +218,8 @@ private fun ScrollChevron(
         enabled = enabled,
         modifier = Modifier
             .padding(horizontal = 2.dp)
-            .size(40.dp),
+            .size(40.dp)
+            .focusProperties { canFocus = false },
         shape = CircleShape,
         color = DesktopUi.SurfaceElevated.copy(alpha = alpha),
         shadowElevation = if (enabled) 4.dp else 0.dp,
@@ -257,27 +263,75 @@ fun PosterTitleLabel(
 }
 
 @Composable
-fun Modifier.posterHoverEffect(): Modifier {
-    val interaction = remember { MutableInteractionSource() }
-    val hovered by interaction.collectIsHoveredAsState()
+fun Modifier.posterHoverEffect(
+    interactionSource: MutableInteractionSource = remember { MutableInteractionSource() },
+    onClick: (() -> Unit)? = null,
+): Modifier {
+    val hovered by interactionSource.collectIsHoveredAsState()
+    val focused by interactionSource.collectIsFocusedAsState()
+    val isHighlighted = hovered || focused
+
+    val clickTrigger by GamepadActionBridge.clickTrigger.collectAsState()
+    LaunchedEffect(clickTrigger) {
+        if (focused && clickTrigger > 0 && onClick != null) {
+            onClick()
+        }
+    }
+
     val scale by animateFloatAsState(
-        targetValue = if (hovered) 1.05f else 1f,
+        targetValue = if (isHighlighted) 1.05f else 1f,
         animationSpec = tween(180),
         label = "posterScale",
     )
     val elevation by animateFloatAsState(
-        targetValue = if (hovered) 12f else 4f,
+        targetValue = if (isHighlighted) 12f else 4f,
         animationSpec = tween(180),
         label = "posterElevation",
     )
     val borderColor by androidx.compose.animation.animateColorAsState(
-        targetValue = if (hovered) MaterialTheme.colorScheme.primary else Color.Transparent,
+        targetValue = if (isHighlighted) MaterialTheme.colorScheme.primary else Color.Transparent,
         animationSpec = tween(180),
         label = "posterBorderColor",
     )
-    return this
+
+    val baseModifier = this
         .scale(scale)
-        .hoverable(interaction)
         .shadow(elevation.dp, RoundedCornerShape(12.dp))
         .border(2.dp, borderColor, RoundedCornerShape(12.dp))
+
+    return if (onClick != null) {
+        baseModifier.clickable(
+            interactionSource = interactionSource,
+            indication = null,
+            onClick = onClick,
+        )
+    } else {
+        baseModifier
+            .hoverable(interactionSource)
+            .focusable(interactionSource = interactionSource)
+    }
+}
+
+@Composable
+fun Modifier.gamepadFocusable(
+    interactionSource: MutableInteractionSource = remember { MutableInteractionSource() },
+    onClick: (() -> Unit)? = null,
+): Modifier {
+    val focused by interactionSource.collectIsFocusedAsState()
+    val clickTrigger by GamepadActionBridge.clickTrigger.collectAsState()
+    LaunchedEffect(clickTrigger) {
+        if (focused && clickTrigger > 0 && onClick != null) {
+            onClick()
+        }
+    }
+
+    return if (onClick != null) {
+        this.clickable(
+            interactionSource = interactionSource,
+            indication = androidx.compose.material3.ripple(),
+            onClick = onClick,
+        )
+    } else {
+        this.focusable(interactionSource = interactionSource)
+    }
 }

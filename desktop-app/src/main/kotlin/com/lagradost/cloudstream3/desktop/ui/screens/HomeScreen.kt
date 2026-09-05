@@ -2,16 +2,19 @@ package com.lagradost.cloudstream3.desktop.ui.screens
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.unit.dp
+import com.lagradost.cloudstream3.desktop.controller.GamepadActionBridge
 import com.lagradost.cloudstream3.desktop.ui.navigation.NavController
 import com.lagradost.cloudstream3.desktop.ui.navigation.Screen
 import com.lagradost.cloudstream3.desktop.ui.screens.details.GlobalDetailsCache
 import com.lagradost.cloudstream3.desktop.ui.screens.home.*
-// haze imports removed
+import kotlinx.coroutines.isActive
 
 @Composable
 fun ComposeHomeScreen(
@@ -21,6 +24,23 @@ fun ComposeHomeScreen(
 ) {
     val coroutineScope = rememberCoroutineScope()
     val viewModel = remember { HomeViewModel(coroutineScope) }
+
+    val homeLazyListState = rememberLazyListState()
+    val rightStickY by GamepadActionBridge.rightStickY.collectAsState()
+
+    LaunchedEffect(rightStickY) {
+        if (kotlin.math.abs(rightStickY) > 0.05f) {
+            while (isActive && kotlin.math.abs(GamepadActionBridge.rightStickY.value) > 0.05f) {
+                val y = GamepadActionBridge.rightStickY.value
+                val scrollDelta = y * 28f
+                homeLazyListState.dispatchRawDelta(scrollDelta)
+                kotlinx.coroutines.delay(16)
+            }
+        }
+    }
+
+    val searchFocusRequester = remember { FocusRequester() }
+    val heroPlayFocusRequester = remember { FocusRequester() }
 
     val providers by viewModel.providers.collectAsState()
     val selectedProvider by viewModel.selectedProvider.collectAsState()
@@ -101,6 +121,7 @@ fun ComposeHomeScreen(
         } else if (selectedProvider != null && selectedProvider!!.hasMainPage && selectedProvider!!.mainPage.isNotEmpty()) {
             val currentProvider = selectedProvider!!
             LazyColumn(
+                state = homeLazyListState,
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(bottom = 32.dp),
             ) {
@@ -111,6 +132,8 @@ fun ComposeHomeScreen(
                             provider = currentProvider,
                             isFirstPage = true,
                             parentScope = coroutineScope,
+                            heroFocusRequester = heroPlayFocusRequester,
+                            searchFocusRequester = searchFocusRequester,
                             afterHeroContent = {
                                 HomeHistoryRow(
                                     historyList = historyList,
@@ -156,18 +179,20 @@ fun ComposeHomeScreen(
                 Text("No content available for this provider.")
             }
         }
-    }
 
-    HomeTopBar(
-        searchQuery = searchQuery,
-        onSearchQueryChange = { viewModel.searchQuery.value = it },
-        onSearch = { viewModel.search() },
-        providers = providers,
-        selectedProvider = selectedProvider,
-        onProviderSelected = {
-            viewModel.selectedProviderName.value = it
-            viewModel.searchResultsGrouped.value = null
-        },
-        mergedPluginIcons = mergedPluginIcons,
-    )
+        HomeTopBar(
+            searchQuery = searchQuery,
+            onSearchQueryChange = { viewModel.searchQuery.value = it },
+            onSearch = { viewModel.search() },
+            providers = providers,
+            selectedProvider = selectedProvider,
+            onProviderSelected = {
+                viewModel.selectedProviderName.value = it
+                viewModel.searchResultsGrouped.value = null
+            },
+            mergedPluginIcons = mergedPluginIcons,
+            searchFocusRequester = searchFocusRequester,
+            onDownFocusRequester = heroPlayFocusRequester,
+        )
+    }
 }

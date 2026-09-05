@@ -22,6 +22,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.lagradost.cloudstream3.APIHolder
+import com.lagradost.cloudstream3.desktop.ui.components.posterHoverEffect
 import com.lagradost.cloudstream3.desktop.ui.navigation.NavController
 import com.lagradost.cloudstream3.desktop.ui.navigation.Screen
 import com.lagradost.common.storage.DesktopBookmark
@@ -119,7 +120,7 @@ fun BookmarkCard(bookmark: DesktopBookmark, onClick: () -> Unit, onDelete: () ->
         modifier = Modifier
             .fillMaxWidth()
             .height(260.dp)
-            .clickable { onClick() },
+            .posterHoverEffect(onClick = onClick),
         shape = RoundedCornerShape(8.dp),
         elevation = CardDefaults.cardElevation(4.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),

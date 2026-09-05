@@ -13,6 +13,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
@@ -21,6 +22,7 @@ import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.desktop.ui.NextEpisodeData
+import com.lagradost.cloudstream3.desktop.ui.components.gamepadFocusable
 import com.lagradost.common.storage.DesktopDataStore
 import com.lagradost.common.storage.WatchHistory
 import com.lagradost.player.impl.PlayerLinkHandler
@@ -37,7 +39,7 @@ fun EpisodeCard(ep: Episode, isLatest: Boolean, history: WatchHistory?, provider
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 4.dp)
-            .clickable { navigateToPlay(provider, data, ep, onPlay) },
+            .gamepadFocusable(onClick = { navigateToPlay(provider, data, ep, onPlay) }),
         colors = CardDefaults.cardColors(
             containerColor = if (isLatest) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
         ),
@@ -162,7 +164,9 @@ fun EpisodeCard(ep: Episode, isLatest: Boolean, history: WatchHistory?, provider
                 onClick = {
                     navigateToPlay(provider, data, ep, onPlay, autoPlay = false)
                 },
-                modifier = Modifier.padding(start = 8.dp),
+                modifier = Modifier
+                    .padding(start = 8.dp)
+                    .focusProperties { canFocus = false },
             ) {
                 if (isDownloaded) {
                     Icon(

@@ -18,6 +18,9 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -27,8 +30,10 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import coil3.compose.AsyncImage
 import com.lagradost.cloudstream3.MainAPI
+import com.lagradost.cloudstream3.desktop.controller.GamepadActionBridge
 import com.lagradost.cloudstream3.desktop.ui.components.DesktopUi
-// Haze removed for performance
+import com.lagradost.cloudstream3.desktop.ui.components.gamepadFocusable
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeTopBar(
@@ -39,8 +44,19 @@ fun HomeTopBar(
     selectedProvider: MainAPI?,
     onProviderSelected: (String) -> Unit,
     mergedPluginIcons: Map<String, String>,
+    searchFocusRequester: FocusRequester? = null,
+    onDownFocusRequester: FocusRequester? = null,
 ) {
     var isProviderDropdownExpanded by remember { mutableStateOf(false) }
+
+    val searchTrigger by GamepadActionBridge.searchTrigger.collectAsState()
+    LaunchedEffect(searchTrigger) {
+        if (searchTrigger > 0 && searchFocusRequester != null) {
+            try {
+                searchFocusRequester.requestFocus()
+            } catch (_: Throwable) {}
+        }
+    }
 
     fun fuzzyMatchIcon(providerName: String): String? {
         val pName = providerName.lowercase().replace(Regex("[^a-z0-9]"), "").replace("provider", "").replace("plugin", "")
@@ -80,7 +96,14 @@ fun HomeTopBar(
                             singleLine = true,
                             textStyle = TextStyle(color = DesktopUi.TextPrimary, fontSize = 15.sp),
                             cursorBrush = androidx.compose.ui.graphics.SolidColor(DesktopUi.TextPrimary),
-                            modifier = Modifier.weight(1f),
+                            modifier = Modifier
+                                .weight(1f)
+                                .let { if (searchFocusRequester != null) it.focusRequester(searchFocusRequester) else it }
+                                .focusProperties {
+                                    if (onDownFocusRequester != null) {
+                                        down = onDownFocusRequester
+                                    }
+                                },
                             keyboardOptions = KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Search),
                             keyboardActions = KeyboardActions(onSearch = onSearch),
                             decorationBox = { innerTextField ->
@@ -92,9 +115,12 @@ fun HomeTopBar(
                                 }
                             },
                         )
-                        IconButton(onClick = {
-                            if (searchQuery.isNotBlank()) onSearchQueryChange("")
-                        }) {
+                        IconButton(
+                            onClick = {
+                                if (searchQuery.isNotBlank()) onSearchQueryChange("")
+                            },
+                            modifier = Modifier.focusProperties { canFocus = false },
+                        ) {
                             Icon(
                                 imageVector = if (searchQuery.isNotBlank()) Icons.Default.Close else Icons.Default.Search,
                                 contentDescription = "Search",
@@ -113,7 +139,14 @@ fun HomeTopBar(
                     shape = CircleShape,
                     color = DesktopUi.SurfaceElevated.copy(alpha = 0.85f),
                     border = BorderStroke(1.dp, DesktopUi.Accent.copy(alpha = 0.5f)),
-                    modifier = Modifier.height(52.dp),
+                    modifier = Modifier
+                        .height(52.dp)
+                        .gamepadFocusable(onClick = { isProviderDropdownExpanded = true })
+                        .focusProperties {
+                            if (onDownFocusRequester != null) {
+                                down = onDownFocusRequester
+                            }
+                        },
                 ) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
@@ -183,7 +216,7 @@ fun HomeTopBar(
                                                     shape = RoundedCornerShape(16.dp),
                                                     color = if (isSelected) Color.White.copy(alpha = 0.2f) else Color.Transparent,
                                                     border = BorderStroke(1.dp, Color.White.copy(alpha = 0.2f)),
-                                                    modifier = Modifier.clickable { selectedCategory = cat },
+                                                    modifier = Modifier.gamepadFocusable(onClick = { selectedCategory = cat }),
                                                 ) {
                                                     Row(
                                                         verticalAlignment = Alignment.CenterVertically,
@@ -238,10 +271,10 @@ fun HomeTopBar(
                                                 verticalAlignment = Alignment.CenterVertically,
                                                 modifier = Modifier
                                                     .fillMaxWidth()
-                                                    .clickable {
+                                                    .gamepadFocusable(onClick = {
                                                         onProviderSelected(provider.name)
                                                         isProviderDropdownExpanded = false
-                                                    }
+                                                    })
                                                     .padding(vertical = 12.dp),
                                             ) {
                                                 RadioButton(

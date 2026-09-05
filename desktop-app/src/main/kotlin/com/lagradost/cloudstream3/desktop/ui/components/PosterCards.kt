@@ -47,9 +47,8 @@ fun PosterCard(
     Surface(
         modifier = modifier
             .width(width)
-            .posterHoverEffect()
             .clip(shape)
-            .clickable(onClick = onClick),
+            .posterHoverEffect(onClick = onClick),
         shape = shape,
         color = DesktopUi.SurfaceCard,
         tonalElevation = 2.dp,
@@ -176,9 +175,8 @@ fun WatchHistoryCard(
     Surface(
         modifier = modifier
             .width(width)
-            .posterHoverEffect()
             .clip(shape)
-            .clickable(onClick = onClick),
+            .posterHoverEffect(onClick = onClick),
         shape = shape,
         color = DesktopUi.SurfaceCard,
         tonalElevation = 2.dp,
