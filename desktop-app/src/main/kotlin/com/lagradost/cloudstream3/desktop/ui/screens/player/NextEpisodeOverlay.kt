@@ -57,8 +57,8 @@ fun NextEpisodeOverlay(
         DesktopDataStore.getKey<Boolean>(PlayerConfig.PREF_AUTO_PLAY_NEXT_EPISODE) ?: true
     }
     val totalCountdownSeconds = remember {
-        (DesktopDataStore.getKey<String>(PlayerConfig.PREF_AUTO_PLAY_NEXT_EPISODE_SECONDS)?.toIntOrNull() ?: 10)
-            .coerceIn(3, 60)
+        (DesktopDataStore.getKey<String>(PlayerConfig.PREF_AUTO_PLAY_NEXT_EPISODE_SECONDS)?.toIntOrNull() ?: 3)
+            .coerceIn(1, 60)
     }
 
     var secondsRemaining by remember { mutableStateOf(totalCountdownSeconds) }

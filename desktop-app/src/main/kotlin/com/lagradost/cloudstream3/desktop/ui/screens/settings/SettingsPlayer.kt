@@ -21,7 +21,8 @@ fun SettingsPlayer() {
     var autoPlayTimeout by remember { mutableStateOf(DesktopDataStore.getKey<String>(PlayerConfig.PREF_AUTO_PLAY_TIMEOUT) ?: "15000") }
 
     var autoPlayNextEpisode by remember { mutableStateOf(DesktopDataStore.getKey<Boolean>(PlayerConfig.PREF_AUTO_PLAY_NEXT_EPISODE) ?: true) }
-    var autoPlayNextEpisodeSeconds by remember { mutableStateOf(DesktopDataStore.getKey<String>(PlayerConfig.PREF_AUTO_PLAY_NEXT_EPISODE_SECONDS) ?: "10") }
+    var autoPlayNextEpisodeSeconds by remember { mutableStateOf(DesktopDataStore.getKey<String>(PlayerConfig.PREF_AUTO_PLAY_NEXT_EPISODE_SECONDS) ?: "3") }
+    var autoFullscreen by remember { mutableStateOf(DesktopDataStore.getKey<Boolean>(PlayerConfig.PREF_AUTO_FULLSCREEN) ?: true) }
 
     Card(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
@@ -60,6 +61,20 @@ fun SettingsPlayer() {
                 },
             )
 
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Auto Fullscreen on Playback Toggle
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Auto-fullscreen on playback", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.weight(1f))
+                Switch(
+                    checked = autoFullscreen,
+                    onCheckedChange = {
+                        autoFullscreen = it
+                        DesktopDataStore.setKey(PlayerConfig.PREF_AUTO_FULLSCREEN, it)
+                    },
+                )
+            }
+
             Spacer(modifier = Modifier.height(16.dp))
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
             Spacer(modifier = Modifier.height(16.dp))
@@ -83,10 +98,12 @@ fun SettingsPlayer() {
                 PlayerDropdownSetting(
                     label = "Next Episode Countdown",
                     options = listOf(
+                        "3" to "3 Seconds",
                         "5" to "5 Seconds",
                         "10" to "10 Seconds",
                         "15" to "15 Seconds",
                         "20" to "20 Seconds",
+                        "30" to "30 Seconds",
                     ),
                     currentValue = autoPlayNextEpisodeSeconds,
                     onSelectionChanged = {

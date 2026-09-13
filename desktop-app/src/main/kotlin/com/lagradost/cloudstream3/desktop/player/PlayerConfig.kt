@@ -14,8 +14,13 @@ object PlayerConfig {
     const val PREF_AUTO_PLAY_NEXT_EPISODE = "player_auto_play_next_episode"
     const val PREF_AUTO_PLAY_NEXT_EPISODE_SECONDS = "player_auto_play_next_episode_seconds"
     const val PREF_SPEED = "player_speed"
+    const val PREF_AUTO_FULLSCREEN = "player_auto_fullscreen"
 
     fun applyMpvSettings(handle: Pointer, lib: MpvLibrary) {
+        // Auto Fullscreen (Default: true)
+        val autoFullscreen = DesktopDataStore.getKey<Boolean>(PREF_AUTO_FULLSCREEN) ?: true
+        lib.mpv_set_option_string(handle, "fs", if (autoFullscreen) "yes" else "no")
+
         // Hardware Acceleration (Default: auto-safe, prioritize vaapi/nvdec to avoid experimental vulkan seek deadlocks)
         val hwdec = DesktopDataStore.getKey<String>(PREF_HWDEC) ?: "vaapi,vaapi-copy,nvdec,nvdec-copy,auto-safe"
         lib.mpv_set_option_string(handle, "hwdec", hwdec)

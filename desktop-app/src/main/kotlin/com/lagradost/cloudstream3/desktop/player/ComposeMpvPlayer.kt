@@ -33,7 +33,10 @@ fun ComposeMpvPlayer(
 ) {
     var mpvHandle by remember { mutableStateOf<com.sun.jna.Pointer?>(null) }
     var hasEverPlayed by remember { mutableStateOf(false) }
-    var lastFullscreenState by remember { mutableStateOf(false) }
+    val autoFullscreen = remember {
+        com.lagradost.common.storage.DesktopDataStore.getKey<Boolean>(PlayerConfig.PREF_AUTO_FULLSCREEN) ?: true
+    }
+    var lastFullscreenState by remember { mutableStateOf(autoFullscreen) }
     var lastSpeed by remember { mutableStateOf<String?>(null) }
     val isDisposed = remember { java.util.concurrent.atomic.AtomicBoolean(false) }
     val isDestroyed = remember { java.util.concurrent.atomic.AtomicBoolean(false) }
@@ -109,11 +112,13 @@ fun ComposeMpvPlayer(
                 val fsStr = synchronized(handleLock) {
                     if (!isDisposed.get()) MpvLibrary.INSTANCE.getProperty(h, "fullscreen") else null
                 }
-                val isFs = fsStr == "yes"
-                if (isFs != lastFullscreenState) {
-                    lastFullscreenState = isFs
-                    withContext(Dispatchers.Main) {
-                        onFullscreenToggle(isFs)
+                if (fsStr != null) {
+                    val isFs = fsStr == "yes"
+                    if (isFs != lastFullscreenState) {
+                        lastFullscreenState = isFs
+                        withContext(Dispatchers.Main) {
+                            onFullscreenToggle(isFs)
+                        }
                     }
                 }
 
@@ -390,12 +395,18 @@ fun ComposeMpvPlayer(
                                 onCloseRequest()
                             } else if (mpvKey == "ENTER") {
                                 sendMpvCommand(h, "cycle fullscreen", isDisposed, handleLock)
+                            } else if (mpvKey == "ESC") {
+                                if (lastFullscreenState) {
+                                    sendMpvCommand(h, "set fullscreen no", isDisposed, handleLock)
+                                } else {
+                                    onCloseRequest()
+                                }
                             } else if (mpvKey != null) {
                                 sendMpvCommand(h, "keydown $mpvKey", isDisposed, handleLock)
                             }
                         } else if (e.id == KeyEvent.KEY_RELEASED) {
                             val mpvKey = awtKeyToMpv(e)
-                            if (mpvKey != null && !mpvKey.contains("QUIT_OVERRIDE") && mpvKey != "ENTER") {
+                            if (mpvKey != null && !mpvKey.contains("QUIT_OVERRIDE") && mpvKey != "ENTER" && mpvKey != "ESC") {
                                 sendMpvCommand(h, "keyup $mpvKey", isDisposed, handleLock)
                             }
                         }

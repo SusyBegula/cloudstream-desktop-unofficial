@@ -36,9 +36,31 @@ fun EmbeddedVideoPlayer(
     var lastSavedPositionSec by remember { mutableStateOf(0L) }
     val windowState = LocalWindowState.current
     val isFullscreen = windowState?.placement == WindowPlacement.Fullscreen
+    val autoFullscreen = remember {
+        DesktopDataStore.getKey<Boolean>(com.lagradost.cloudstream3.desktop.player.PlayerConfig.PREF_AUTO_FULLSCREEN) ?: true
+    }
+    var previousPlacement by remember {
+        mutableStateOf(
+            if (windowState?.placement != WindowPlacement.Fullscreen) {
+                windowState?.placement ?: WindowPlacement.Floating
+            } else {
+                WindowPlacement.Floating
+            }
+        )
+    }
+
+    LaunchedEffect(Unit) {
+        if (autoFullscreen && windowState?.placement != WindowPlacement.Fullscreen) {
+            previousPlacement = windowState?.placement ?: WindowPlacement.Floating
+            windowState?.placement = WindowPlacement.Fullscreen
+        }
+    }
 
     DisposableEffect(Unit) {
         onDispose {
+            if (windowState?.placement == WindowPlacement.Fullscreen) {
+                windowState.placement = previousPlacement
+            }
             if (lastDurationSec > 0 && lastPositionSec > 0) {
                 val updatedHistory = launchData.history.copy(
                     position = lastPositionSec,
@@ -66,6 +88,9 @@ fun EmbeddedVideoPlayer(
             ) {
                 IconButton(
                     onClick = {
+                        if (windowState?.placement == WindowPlacement.Fullscreen) {
+                            windowState.placement = previousPlacement
+                        }
                         launchData.onClosed?.invoke()
                         onClose()
                     },
@@ -132,10 +157,13 @@ fun EmbeddedVideoPlayer(
                                 isFinished = true
                             },
                             onFullscreenToggle = { fs ->
-                                windowState?.placement = if (fs) {
-                                    WindowPlacement.Fullscreen
+                                if (fs) {
+                                    if (windowState?.placement != WindowPlacement.Fullscreen) {
+                                        previousPlacement = windowState?.placement ?: WindowPlacement.Floating
+                                        windowState?.placement = WindowPlacement.Fullscreen
+                                    }
                                 } else {
-                                    WindowPlacement.Floating
+                                    windowState?.placement = previousPlacement
                                 }
                             },
                             onPositionChange = { posMs, durMs ->
@@ -155,6 +183,9 @@ fun EmbeddedVideoPlayer(
                                 }
                             },
                             onCloseRequest = {
+                                if (windowState?.placement == WindowPlacement.Fullscreen) {
+                                    windowState.placement = previousPlacement
+                                }
                                 launchData.onClosed?.invoke()
                                 onClose()
                             },
@@ -223,7 +254,7 @@ fun EmbeddedVideoPlayer(
                     launchData = launchData,
                     onPlayNext = {
                         if (isFullscreen) {
-                            windowState.placement = WindowPlacement.Floating
+                            windowState.placement = previousPlacement
                         }
                         launchData.onClosed?.invoke()
                         launchData.nextEpisode?.onPlay?.invoke() ?: launchData.onPlayNext?.invoke()
@@ -237,7 +268,7 @@ fun EmbeddedVideoPlayer(
                     },
                     onClose = {
                         if (isFullscreen) {
-                            windowState.placement = WindowPlacement.Floating
+                            windowState.placement = previousPlacement
                         }
                         launchData.onClosed?.invoke()
                         onClose()
