@@ -206,3 +206,79 @@ compose.desktop {
         }.forEach { it.dependsOn(stripPlaywrightDriver) }
     }
 }
+
+val installLinuxApp by tasks.registering {
+    description = "Builds and installs CloudStream Desktop into ~/.local/share and registers it with the application drawer."
+    group = "distribution"
+    dependsOn("createDistributable")
+
+    doLast {
+        val userHome = File(System.getProperty("user.home"))
+        val installDir = File(userHome, ".local/share/cloudstream-desktop")
+        val binDir = File(userHome, ".local/bin")
+        val appDir = File(userHome, ".local/share/applications")
+        val iconDir = File(userHome, ".local/share/icons/hicolor/256x256/apps")
+        val pixmapsDir = File(userHome, ".local/share/pixmaps")
+
+        installDir.mkdirs()
+        binDir.mkdirs()
+        appDir.mkdirs()
+        iconDir.mkdirs()
+        pixmapsDir.mkdirs()
+
+        val builtDistDir = layout.buildDirectory.get().asFile.resolve("compose/binaries/main/app/CloudStream-Desktop")
+        if (!builtDistDir.exists()) {
+            throw GradleException("Built distribution not found at ${builtDistDir.absolutePath}")
+        }
+
+        println("Installing standalone binaries to ${installDir.absolutePath}...")
+        builtDistDir.copyRecursively(installDir, overwrite = true)
+
+        val targetBin = File(installDir, "bin/CloudStream-Desktop")
+        targetBin.setExecutable(true, false)
+
+        val launcher = File(binDir, "cloudstream-desktop")
+        launcher.writeText(
+            """
+            |#!/usr/bin/env sh
+            |export _JAVA_AWT_WM_NONREPARENTING=1
+            |exec "${targetBin.absolutePath}" "$@"
+            """.trimMargin().trim() + "\n"
+        )
+        launcher.setExecutable(true, false)
+
+        val sourceIcon = project.file("src/main/resources/logo_ui.png")
+        if (sourceIcon.exists()) {
+            sourceIcon.copyTo(File(iconDir, "cloudstream-desktop.png"), overwrite = true)
+            sourceIcon.copyTo(File(pixmapsDir, "cloudstream-desktop.png"), overwrite = true)
+        }
+
+        val desktopFile = File(appDir, "cloudstream-desktop.desktop")
+        desktopFile.writeText(
+            """
+            |[Desktop Entry]
+            |Name=CloudStream Desktop
+            |GenericName=Media Streaming Player
+            |Comment=Unofficial CloudStream Desktop Client
+            |Exec=${launcher.absolutePath} %U
+            |Icon=cloudstream-desktop
+            |Terminal=false
+            |Type=Application
+            |Categories=AudioVideo;Video;Player;Network;
+            |StartupWMClass=com.lagradost.cloudstream3.desktop.MainKt
+            |Keywords=stream;streaming;cloudstream;movie;tv;anime;video;
+            """.trimMargin().trim() + "\n"
+        )
+
+        try {
+            ProcessBuilder("update-desktop-database", appDir.absolutePath).start().waitFor()
+        } catch (_: Throwable) {}
+
+        println("================================================================")
+        println(" CloudStream Desktop successfully installed!")
+        println(" Desktop Entry: ${desktopFile.absolutePath}")
+        println(" Launcher Command: ${launcher.absolutePath} (in PATH)")
+        println("================================================================")
+    }
+}
+
