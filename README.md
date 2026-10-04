@@ -12,6 +12,7 @@
 ## 🚀 Key Features & Linux Port Enhancements
 
 - **Cross-Platform Support:** Fully ported and optimized for Linux (tested on Arch Linux under Wayland & Hyprland) and Windows.
+- **Browse Catalog:** Discover movies, shows, and anime from TMDB through the sidebar, with genre, year, rating, original language, and sorting filters. Anime covers Japanese animation, with movie and show formats. Select a title to search installed content providers for playback; catalog browsing itself needs no extensions.
 - **Embedded Hardware Video Playback:** Uses `libmpv` (System `libmpv.so.2` / `libmpv.so.1` on Linux, or bundled DLL on Windows) embedded via AWT `Canvas` and JNA.
 - **Linux Wayland / Hyprland Embedding:** Uses `gpu-context=x11egl` for MPV window embedding (`--wid`) under XWayland, preventing MPV from spawning external windows.
 - **C Locale Process Initializer:** Forces `LC_NUMERIC="C"` via JNA `setlocale` to prevent native `libmpv` initialization failures on non-C system locales.

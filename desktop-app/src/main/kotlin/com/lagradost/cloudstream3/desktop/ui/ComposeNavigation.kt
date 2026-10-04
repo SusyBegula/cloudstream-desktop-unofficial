@@ -35,6 +35,9 @@ val LocalWindowState = androidx.compose.runtime.staticCompositionLocalOf<android
 @Composable
 fun CloudstreamApp() {
     val navController = remember { NavController() }
+    val browseScope = androidx.compose.runtime.rememberCoroutineScope()
+    val browseViewModel = remember { com.lagradost.cloudstream3.desktop.ui.screens.browse.BrowseViewModel(browseScope) }
+    val browseGridState = androidx.compose.foundation.lazy.grid.rememberLazyGridState()
     var showErrorsDialog by remember { mutableStateOf(false) }
     var currentVideo by remember { mutableStateOf<VideoLaunchData?>(null) }
     val screen = navController.currentScreen
@@ -88,6 +91,13 @@ fun CloudstreamApp() {
                                     showErrorsDialog = showErrorsDialog,
                                     onDismissErrors = { showErrorsDialog = false },
                                 )
+                            }
+                            is Screen.Browse -> DesktopAppShell(
+                                navController = navController,
+                                title = "Browse",
+                                onErrorLogs = { showErrorsDialog = true },
+                            ) {
+                                com.lagradost.cloudstream3.desktop.ui.screens.browse.BrowseScreen(navController, browseViewModel, browseGridState)
                             }
                             is Screen.Extensions -> DesktopAppShell(
                                 navController = navController,

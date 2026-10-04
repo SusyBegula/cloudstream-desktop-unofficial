@@ -176,6 +176,7 @@ private fun NavigationDock(
                 modifier = Modifier.padding(horizontal = 8.dp),
             ) {
                 DockItem(icon = Icons.Default.Home, label = "Board", selected = current is Screen.Home, onClick = { onNavigate(Screen.Home) })
+                DockItem(icon = Icons.Default.Explore, label = "Browse", selected = current is Screen.Browse, onClick = { onNavigate(Screen.Browse) })
                 DockItem(icon = Icons.Default.FavoriteBorder, label = "Library", selected = current is Screen.Library, onClick = { onNavigate(Screen.Library) })
                 DockItem(
                     icon = Icons.Default.Download,
