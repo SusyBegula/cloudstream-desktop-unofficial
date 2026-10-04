@@ -30,6 +30,7 @@ import com.lagradost.cloudstream3.SubtitleFile
 import com.lagradost.cloudstream3.desktop.download.FfmpegDownloadManager
 import com.lagradost.cloudstream3.desktop.ui.NextEpisodeData
 import com.lagradost.cloudstream3.desktop.ui.components.DesktopUi
+import com.lagradost.cloudstream3.desktop.utils.DefaultStreamHelper
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.common.storage.DesktopDataStore
 import com.lagradost.common.storage.WatchHistory
@@ -82,26 +83,37 @@ fun LinksModal(
     var currentPlayingUrl by remember { mutableStateOf<String?>(null) }
 
     val defaultStreamKey = remember(provider.name, history.showUrl) {
-        "default_stream_${provider.name}_${history.showUrl}"
+        DefaultStreamHelper.buildKey(provider.name, history.showUrl)
     }
-    var defaultStreamName by remember(defaultStreamKey, history.showUrl) {
+    var defaultStreamPref by remember(defaultStreamKey, history.showUrl) {
         mutableStateOf(DesktopDataStore.getKey<String>(defaultStreamKey))
     }
     var hasAutoPlayed by remember { mutableStateOf(false) }
 
     val onToggleDefault: (ExtractorLink) -> Unit = { link ->
-        if (defaultStreamName.equals(link.name, ignoreCase = true)) {
-            defaultStreamName = null
+        if (DefaultStreamHelper.matches(link, defaultStreamPref)) {
+            defaultStreamPref = null
             DesktopDataStore.removeKey(defaultStreamKey)
         } else {
-            defaultStreamName = link.name
-            DesktopDataStore.setKey(defaultStreamKey, link.name)
+            val identifier = DefaultStreamHelper.buildIdentifier(link)
+            defaultStreamPref = identifier
+            DesktopDataStore.setKey(defaultStreamKey, identifier)
         }
     }
 
-    val availableQualities = remember(links.size) { links.map { it.quality.toString() }.distinct().sorted() }
+    val availableQualities = remember(links.size) {
+        links.map { it.quality }
+            .distinct()
+            .sortedDescending()
+            .map { it.toString() }
+    }
     val filteredLinks = remember(links.size, selectedQuality) {
-        if (selectedQuality == null) links else links.filter { it.quality.toString() == selectedQuality }
+        val list = if (selectedQuality == null) {
+            links.toList()
+        } else {
+            links.filter { it.quality.toString() == selectedQuality }
+        }
+        list.sortedWith(compareByDescending<ExtractorLink> { it.quality }.thenBy { it.name.lowercase() })
     }
 
     val displayTitle = remember(history) {
@@ -257,8 +269,9 @@ fun LinksModal(
         subtitles.clear()
         isScraping = true
         hasAutoPlayed = false
-        statusText = if (autoPlay && !defaultStreamName.isNullOrBlank()) {
-            "Searching for preferred stream '$defaultStreamName'..."
+        val preferredDisplayName = DefaultStreamHelper.formatDisplayName(defaultStreamPref)
+        statusText = if (autoPlay && !defaultStreamPref.isNullOrBlank()) {
+            "Searching for preferred stream '$preferredDisplayName'..."
         } else {
             "Finding streams for you..."
         }
@@ -274,7 +287,7 @@ fun LinksModal(
                     callback = { link: ExtractorLink ->
                         coroutineScope.launch {
                             links.add(link)
-                            if (autoPlay && !hasAutoPlayed && !defaultStreamName.isNullOrBlank() && link.name.equals(defaultStreamName, ignoreCase = true)) {
+                            if (autoPlay && !hasAutoPlayed && !defaultStreamPref.isNullOrBlank() && DefaultStreamHelper.matches(link, defaultStreamPref)) {
                                 hasAutoPlayed = true
                                 playLink(link)
                             } else {
@@ -287,8 +300,8 @@ fun LinksModal(
                 if (!hasAutoPlayed) {
                     statusText = when {
                         links.isEmpty() -> "No streams found for this title."
-                        !defaultStreamName.isNullOrBlank() && links.none { it.name.equals(defaultStreamName, ignoreCase = true) } ->
-                            "Preferred stream '$defaultStreamName' not available. Choose a stream below:"
+                        !defaultStreamPref.isNullOrBlank() && links.none { DefaultStreamHelper.matches(it, defaultStreamPref) } ->
+                            "Preferred stream '$preferredDisplayName' not available. Choose a stream below:"
                         else -> "Ready — ${links.size} stream${if (links.size == 1) "" else "s"} available."
                     }
                 }
@@ -441,8 +454,8 @@ fun LinksModal(
                             }
                         }
                     }
-                    itemsIndexed(filteredLinks, key = { index, it -> "${it.name}-${it.url}-$index" }) { index, link ->
-                        val isDefault = !defaultStreamName.isNullOrBlank() && link.name.equals(defaultStreamName, ignoreCase = true)
+                    itemsIndexed(filteredLinks, key = { index, it -> "${it.name}-${it.quality}-${it.url}-$index" }) { index, link ->
+                        val isDefault = !defaultStreamPref.isNullOrBlank() && DefaultStreamHelper.matches(link, defaultStreamPref)
                         val isThisDownloading = currentDownloading != null && currentDownloading.streamUrl == link.url
                         StreamLinkCard(
                             link = link,
@@ -466,14 +479,6 @@ fun LinksModal(
                                     link = link,
                                 )
                                 statusText = "Downloading ${link.name} in background..."
-                            },
-                            onCopy = {
-                                if (link.url.isNotBlank()) {
-                                    val selection = java.awt.datatransfer.StringSelection(link.url)
-                                    java.awt.Toolkit.getDefaultToolkit().systemClipboard
-                                        .setContents(selection, selection)
-                                    statusText = "URL copied to clipboard."
-                                }
                             },
                         )
                     }
@@ -590,7 +595,6 @@ private fun StreamLinkCard(
     downloadSpeed: String = "",
     onPlay: () -> Unit,
     onDownload: () -> Unit,
-    onCopy: () -> Unit,
 ) {
     val interaction = remember { MutableInteractionSource() }
     val hovered by interaction.collectIsHoveredAsState()
@@ -697,16 +701,6 @@ private fun StreamLinkCard(
                 ),
             ) {
                 Text(if (isDownloading) "⬇ Downloading..." else "⬇ Download")
-            }
-
-            Spacer(modifier = Modifier.width(6.dp))
-
-            OutlinedButton(
-                onClick = onCopy,
-                enabled = !isBusy,
-                shape = RoundedCornerShape(10.dp),
-            ) {
-                Text("Copy")
             }
             Spacer(modifier = Modifier.width(8.dp))
             Button(

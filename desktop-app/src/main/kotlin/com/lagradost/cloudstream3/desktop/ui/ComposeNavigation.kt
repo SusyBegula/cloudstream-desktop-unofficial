@@ -131,7 +131,7 @@ fun CloudstreamApp() {
                             },
                             confirmButton = {
                                 androidx.compose.material3.TextButton(onClick = {
-                                    clipboard.setText(androidx.compose.ui.text.AnnotatedString(snapshot))
+                                    com.lagradost.cloudstream3.desktop.utils.DesktopClipboard.copyText(snapshot, clipboard)
                                 }) { androidx.compose.material3.Text("Copy") }
                             },
                             dismissButton = {
