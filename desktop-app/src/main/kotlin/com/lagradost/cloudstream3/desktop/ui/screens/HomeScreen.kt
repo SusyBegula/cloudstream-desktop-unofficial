@@ -9,27 +9,20 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.lagradost.cloudstream3.desktop.ui.navigation.NavController
 import com.lagradost.cloudstream3.desktop.ui.navigation.Screen
+import com.lagradost.cloudstream3.desktop.ui.screens.browse.BrowseCategory
 import com.lagradost.cloudstream3.desktop.ui.screens.details.GlobalDetailsCache
 import com.lagradost.cloudstream3.desktop.ui.screens.home.*
-// haze imports removed
 
 @Composable
 fun ComposeHomeScreen(
     navController: NavController,
-    showErrorsDialog: Boolean = false,
-    onDismissErrors: () -> Unit = {},
+    viewModel: HomeViewModel,
 ) {
     val coroutineScope = rememberCoroutineScope()
-    val viewModel = remember { HomeViewModel(coroutineScope) }
 
     val providers by viewModel.providers.collectAsState()
     val selectedProvider by viewModel.selectedProvider.collectAsState()
-    val searchQuery by viewModel.searchQuery.collectAsState()
-    val searchResultsGrouped by viewModel.searchResultsGrouped.collectAsState()
-    val isLoadingSearch by viewModel.isLoadingSearch.collectAsState()
     val historyList by viewModel.historyList.collectAsState()
-    val mergedPluginIcons by viewModel.mergedPluginIcons.collectAsState()
-    val errorSnapshot by viewModel.errorSnapshot.collectAsState()
 
     LaunchedEffect(historyList) {
         val topHistory = historyList.take(3)
@@ -48,57 +41,8 @@ fun ComposeHomeScreen(
         }
     }
 
-    LaunchedEffect(showErrorsDialog) {
-        if (showErrorsDialog) {
-            viewModel.refreshErrorSnapshot()
-        }
-    }
-
     Box(modifier = Modifier.fillMaxSize()) {
-        if (showErrorsDialog) {
-            AlertDialog(
-                onDismissRequest = onDismissErrors,
-                title = { Text("Error Logs") },
-                text = {
-                    OutlinedTextField(
-                        value = errorSnapshot,
-                        onValueChange = {},
-                        readOnly = true,
-                        modifier = Modifier.fillMaxWidth().height(400.dp),
-                    )
-                },
-                confirmButton = {
-                    val clipboardManager = androidx.compose.ui.platform.LocalClipboardManager.current
-                    Row {
-                        Button(onClick = {
-                            clipboardManager.setText(androidx.compose.ui.text.AnnotatedString(errorSnapshot))
-                        }) {
-                            Text("Copy")
-                        }
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Button(onClick = {
-                            viewModel.refreshErrorSnapshot()
-                            onDismissErrors()
-                        }) {
-                            Text("Close")
-                        }
-                    }
-                },
-            )
-        }
-
-        if (searchQuery.isNotBlank() || searchResultsGrouped != null) {
-            HomeSearchResults(
-                searchResultsGrouped = searchResultsGrouped,
-                isLoadingSearch = isLoadingSearch,
-                onViewAll = { provider, title, items ->
-                    navController.navigate(Screen.CategoryGrid(provider, title, items))
-                },
-                onItemClick = { provider, item, backdrop ->
-                    navController.navigate(Screen.Details(provider, item.url, item.name, item.posterUrl, backdrop))
-                },
-            )
-        } else if (selectedProvider != null && selectedProvider!!.hasMainPage && selectedProvider!!.mainPage.isNotEmpty()) {
+        if (selectedProvider != null && selectedProvider!!.hasMainPage && selectedProvider!!.mainPage.isNotEmpty()) {
             val currentProvider = selectedProvider!!
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
@@ -153,21 +97,15 @@ fun ComposeHomeScreen(
             }
         } else {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text("No content available for this provider.")
+                Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text(if (selectedProvider == null) "Choose a provider to get started" else "No home page available for this provider.")
+                    Text("Use the provider menu above, or explore the catalog.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    OutlinedButton(onClick = { navController.navigate(Screen.Catalog(BrowseCategory.MOVIES)) }) { Text("Explore Catalog") }
+                    if (providers.isEmpty()) {
+                        TextButton(onClick = { navController.navigate(Screen.Extensions) }) { Text("Install extensions") }
+                    }
+                }
             }
         }
     }
-
-    HomeTopBar(
-        searchQuery = searchQuery,
-        onSearchQueryChange = { viewModel.searchQuery.value = it },
-        onSearch = { viewModel.search() },
-        providers = providers,
-        selectedProvider = selectedProvider,
-        onProviderSelected = {
-            viewModel.selectedProviderName.value = it
-            viewModel.searchResultsGrouped.value = null
-        },
-        mergedPluginIcons = mergedPluginIcons,
-    )
 }

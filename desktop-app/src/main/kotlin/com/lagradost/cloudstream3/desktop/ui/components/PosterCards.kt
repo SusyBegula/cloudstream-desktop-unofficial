@@ -1,5 +1,6 @@
 package com.lagradost.cloudstream3.desktop.ui.components
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -16,7 +17,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -33,6 +36,7 @@ fun PosterCard(
     item: SearchResponse,
     provider: MainAPI?,
     modifier: Modifier = Modifier,
+    showTypeBadge: Boolean = false,
     onClick: () -> Unit,
 ) {
     val shape = RoundedCornerShape(12.dp)
@@ -100,6 +104,93 @@ fun PosterCard(
                 }
             }
 
+            // Content-type badge (Movie vs Show vs Anime, etc.)
+            val url = item.url
+            val urlType: com.lagradost.cloudstream3.TvType? = when {
+                url.contains("\"type\"") -> {
+                    val typeVal = Regex("""\"type\"\s*:\s*\"([^\"]+)\"""", RegexOption.IGNORE_CASE)
+                        .find(url)?.groupValues?.get(1)?.lowercase()
+                    when (typeVal) {
+                        "series", "tv", "show" -> com.lagradost.cloudstream3.TvType.TvSeries
+                        "anime" -> com.lagradost.cloudstream3.TvType.Anime
+                        "movie" -> com.lagradost.cloudstream3.TvType.Movie
+                        "live" -> com.lagradost.cloudstream3.TvType.Live
+                        "ova" -> com.lagradost.cloudstream3.TvType.OVA
+                        else -> null
+                    }
+                }
+                url.contains("/series/") || url.contains("/tv/") || url.contains("/show/") || url.contains("/shows/") -> com.lagradost.cloudstream3.TvType.TvSeries
+                url.contains("/movie/") || url.contains("/movies/") -> com.lagradost.cloudstream3.TvType.Movie
+                url.contains("/anime/") -> com.lagradost.cloudstream3.TvType.Anime
+                else -> null
+            }
+
+            val resolvedType = urlType ?: item.type ?: when (item) {
+                is com.lagradost.cloudstream3.MovieSearchResponse -> com.lagradost.cloudstream3.TvType.Movie
+                is com.lagradost.cloudstream3.TvSeriesSearchResponse -> com.lagradost.cloudstream3.TvType.TvSeries
+                is com.lagradost.cloudstream3.AnimeSearchResponse -> com.lagradost.cloudstream3.TvType.Anime
+                is com.lagradost.cloudstream3.LiveSearchResponse -> com.lagradost.cloudstream3.TvType.Live
+                is com.lagradost.cloudstream3.TorrentSearchResponse -> com.lagradost.cloudstream3.TvType.Torrent
+                else -> null
+            }
+
+            if (urlType != null && item.type != urlType) {
+                item.type = urlType
+            }
+            val mediaTypeLabel = when (resolvedType) {
+                com.lagradost.cloudstream3.TvType.Movie -> "MOVIE"
+                com.lagradost.cloudstream3.TvType.AnimeMovie -> "MOVIE"
+                com.lagradost.cloudstream3.TvType.TvSeries -> "SERIES"
+                com.lagradost.cloudstream3.TvType.Anime -> "ANIME"
+                com.lagradost.cloudstream3.TvType.AsianDrama -> "DRAMA"
+                com.lagradost.cloudstream3.TvType.Cartoon -> "CARTOON"
+                com.lagradost.cloudstream3.TvType.Documentary -> "DOCS"
+                com.lagradost.cloudstream3.TvType.Live -> "LIVE"
+                com.lagradost.cloudstream3.TvType.OVA -> "OVA"
+                null -> null
+                else -> resolvedType.name.uppercase()
+            }
+            if (showTypeBadge && mediaTypeLabel != null) {
+                Surface(
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .padding(8.dp),
+                    shape = RoundedCornerShape(6.dp),
+                    color = Color.Black.copy(alpha = 0.72f),
+                    border = BorderStroke(0.5.dp, Color.White.copy(alpha = 0.2f)),
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.5.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.5.dp),
+                    ) {
+                        Box(
+                            Modifier.size(6.dp).background(
+                                if (resolvedType == com.lagradost.cloudstream3.TvType.Movie || resolvedType == com.lagradost.cloudstream3.TvType.AnimeMovie)
+                                    Color(0xFF38BDF8)
+                                else
+                                    Color(0xFFA855F7),
+                                CircleShape,
+                            )
+                        )
+                        Text(
+                            text = mediaTypeLabel,
+                            fontSize = 9.5.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White,
+                            letterSpacing = 0.5.sp,
+                            style = TextStyle(
+                                lineHeight = 9.5.sp,
+                                lineHeightStyle = LineHeightStyle(
+                                    alignment = LineHeightStyle.Alignment.Center,
+                                    trim = LineHeightStyle.Trim.Both,
+                                ),
+                            ),
+                        )
+                    }
+                }
+            }
+
             // Gradient at the bottom with the title
             Box(
                 modifier = Modifier
@@ -128,9 +219,10 @@ fun PosterCard(
                         }
                     if (typeLabel != null) {
                         Box(
+                            contentAlignment = Alignment.Center,
                             modifier = Modifier
                                 .background(DesktopUi.Accent.copy(alpha = 0.85f), RoundedCornerShape(4.dp))
-                                .padding(horizontal = 5.dp, vertical = 2.dp),
+                                .padding(horizontal = 5.dp, vertical = 2.5.dp),
                         ) {
                             Text(
                                 text = typeLabel,
@@ -138,6 +230,13 @@ fun PosterCard(
                                 fontWeight = FontWeight.Bold,
                                 color = Color.White,
                                 letterSpacing = 0.5.sp,
+                                style = TextStyle(
+                                    lineHeight = 9.sp,
+                                    lineHeightStyle = LineHeightStyle(
+                                        alignment = LineHeightStyle.Alignment.Center,
+                                        trim = LineHeightStyle.Trim.Both,
+                                    ),
+                                ),
                             )
                         }
                         Spacer(Modifier.height(4.dp))

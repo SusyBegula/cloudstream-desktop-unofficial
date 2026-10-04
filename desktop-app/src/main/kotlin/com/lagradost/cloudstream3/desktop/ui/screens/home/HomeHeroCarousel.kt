@@ -21,7 +21,9 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -318,19 +320,39 @@ fun HomeHeroCarousel(items: List<SearchResponse>, provider: MainAPI?, onItemClic
                                 com.lagradost.cloudstream3.TvType.Live -> "LIVE"
                                 else -> tvType.name.uppercase()
                             }
-                            Box(
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
                                 modifier = Modifier
                                     .clip(RoundedCornerShape(6.dp))
                                     .background(Color.White.copy(alpha = 0.15f))
                                     .border(0.5.dp, Color.White.copy(alpha = 0.3f), RoundedCornerShape(6.dp))
-                                    .padding(horizontal = 10.dp, vertical = 4.dp),
+                                    .padding(horizontal = 9.dp, vertical = 4.5.dp),
                             ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(6.dp)
+                                        .background(
+                                            if (tvType == com.lagradost.cloudstream3.TvType.Movie || tvType == com.lagradost.cloudstream3.TvType.AnimeMovie)
+                                                Color(0xFF38BDF8)
+                                            else
+                                                Color(0xFFA855F7),
+                                            CircleShape,
+                                        ),
+                                )
                                 Text(
                                     typeLabel,
                                     color = Color.White,
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.Bold,
-                                    letterSpacing = 1.5.sp,
+                                    letterSpacing = 1.2.sp,
+                                    style = TextStyle(
+                                        lineHeight = 11.sp,
+                                        lineHeightStyle = LineHeightStyle(
+                                            alignment = LineHeightStyle.Alignment.Center,
+                                            trim = LineHeightStyle.Trim.Both,
+                                        ),
+                                    ),
                                 )
                             }
                             Spacer(Modifier.height(12.dp))
@@ -355,7 +377,7 @@ fun HomeHeroCarousel(items: List<SearchResponse>, provider: MainAPI?, onItemClic
                                     Icons.Default.Star,
                                     contentDescription = "Rating",
                                     tint = Color(0xFFFFD700), // Gold
-                                    modifier = Modifier.size(22.dp),
+                                    modifier = Modifier.size(20.dp),
                                 )
                                 Spacer(Modifier.width(6.dp))
                                 Text(
@@ -363,6 +385,13 @@ fun HomeHeroCarousel(items: List<SearchResponse>, provider: MainAPI?, onItemClic
                                     color = Color.White,
                                     fontSize = 17.sp,
                                     fontWeight = FontWeight.Bold,
+                                    style = TextStyle(
+                                        lineHeight = 17.sp,
+                                        lineHeightStyle = LineHeightStyle(
+                                            alignment = LineHeightStyle.Alignment.Center,
+                                            trim = LineHeightStyle.Trim.Both,
+                                        ),
+                                    ),
                                 )
                                 Spacer(Modifier.width(16.dp))
                             }
@@ -372,6 +401,13 @@ fun HomeHeroCarousel(items: List<SearchResponse>, provider: MainAPI?, onItemClic
                                     color = Color.White.copy(alpha = 0.7f),
                                     fontSize = 15.sp,
                                     fontWeight = FontWeight.Medium,
+                                    style = TextStyle(
+                                        lineHeight = 15.sp,
+                                        lineHeightStyle = LineHeightStyle(
+                                            alignment = LineHeightStyle.Alignment.Center,
+                                            trim = LineHeightStyle.Trim.Both,
+                                        ),
+                                    ),
                                 )
                             }
                         }
@@ -382,12 +418,25 @@ fun HomeHeroCarousel(items: List<SearchResponse>, provider: MainAPI?, onItemClic
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 meta!!.tags.forEach { tag ->
                                     Box(
+                                        contentAlignment = Alignment.Center,
                                         modifier = Modifier
                                             .clip(RoundedCornerShape(20.dp))
                                             .background(Color.White.copy(alpha = 0.15f))
                                             .padding(horizontal = 12.dp, vertical = 6.dp),
                                     ) {
-                                        Text(tag, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                                        Text(
+                                            tag,
+                                            color = Color.White,
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            style = TextStyle(
+                                                lineHeight = 12.sp,
+                                                lineHeightStyle = LineHeightStyle(
+                                                    alignment = LineHeightStyle.Alignment.Center,
+                                                    trim = LineHeightStyle.Trim.Both,
+                                                ),
+                                            ),
+                                        )
                                     }
                                 }
                             }

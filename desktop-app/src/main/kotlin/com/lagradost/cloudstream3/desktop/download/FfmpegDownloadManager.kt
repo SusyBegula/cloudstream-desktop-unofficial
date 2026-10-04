@@ -1,5 +1,6 @@
 package com.lagradost.cloudstream3.desktop.download
 
+import com.lagradost.cloudstream3.desktop.utils.DefaultStreamHelper
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.common.logging.AppLogger
 import com.lagradost.common.platform.PlatformPaths
@@ -290,8 +291,8 @@ object FfmpegDownloadManager {
                     }
                 }
 
-                val defaultStreamKey = "default_stream_${provider.name}_${data.url}"
-                val defaultStreamName = DesktopDataStore.getKey<String>(defaultStreamKey)
+                val defaultStreamKey = DefaultStreamHelper.buildKey(provider.name, data.url)
+                val defaultStreamPref = DesktopDataStore.getKey<String>(defaultStreamKey)
 
                 val links = Collections.synchronizedList(mutableListOf<ExtractorLink>())
                 var selectedLink: ExtractorLink? = null
@@ -304,7 +305,7 @@ object FfmpegDownloadManager {
                             subtitleCallback = {},
                             callback = { link ->
                                 links.add(link)
-                                if (!defaultStreamName.isNullOrBlank() && link.name.equals(defaultStreamName, ignoreCase = true)) {
+                                if (DefaultStreamHelper.matches(link, defaultStreamPref)) {
                                     selectedLink = link
                                 }
                             },

@@ -5,6 +5,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.PlayArrow
@@ -16,8 +17,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.desktop.ui.NextEpisodeData
@@ -114,13 +117,30 @@ fun EpisodeCard(ep: Episode, isLatest: Boolean, history: WatchHistory?, provider
                             shape = RoundedCornerShape(4.dp),
                             color = Color(0xFF1B382B),
                         ) {
-                            Text(
-                                "✓ Downloaded",
-                                color = Color(0xFF81C784),
-                                style = MaterialTheme.typography.labelSmall,
-                                fontWeight = FontWeight.Bold,
-                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                            )
+                            Row(
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.5.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            ) {
+                                Icon(
+                                    Icons.Default.Check,
+                                    contentDescription = null,
+                                    tint = Color(0xFF81C784),
+                                    modifier = Modifier.size(11.dp),
+                                )
+                                Text(
+                                    "Downloaded",
+                                    color = Color(0xFF81C784),
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        lineHeight = 11.sp,
+                                        lineHeightStyle = LineHeightStyle(
+                                            alignment = LineHeightStyle.Alignment.Center,
+                                            trim = LineHeightStyle.Trim.Both,
+                                        ),
+                                    ),
+                                    fontWeight = FontWeight.Bold,
+                                )
+                            }
                         }
                     } else if (downloading != null) {
                         Spacer(modifier = Modifier.width(8.dp))
@@ -128,13 +148,30 @@ fun EpisodeCard(ep: Episode, isLatest: Boolean, history: WatchHistory?, provider
                             shape = RoundedCornerShape(4.dp),
                             color = Color(0xFF1C2D42),
                         ) {
-                            Text(
-                                "⬇ Downloading...",
-                                color = Color(0xFF64B5F6),
-                                style = MaterialTheme.typography.labelSmall,
-                                fontWeight = FontWeight.Bold,
-                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                            )
+                            Row(
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.5.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            ) {
+                                Icon(
+                                    Icons.Default.Download,
+                                    contentDescription = null,
+                                    tint = Color(0xFF64B5F6),
+                                    modifier = Modifier.size(11.dp),
+                                )
+                                Text(
+                                    "Downloading...",
+                                    color = Color(0xFF64B5F6),
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        lineHeight = 11.sp,
+                                        lineHeightStyle = LineHeightStyle(
+                                            alignment = LineHeightStyle.Alignment.Center,
+                                            trim = LineHeightStyle.Trim.Both,
+                                        ),
+                                    ),
+                                    fontWeight = FontWeight.Bold,
+                                )
+                            }
                         }
                     }
                 }

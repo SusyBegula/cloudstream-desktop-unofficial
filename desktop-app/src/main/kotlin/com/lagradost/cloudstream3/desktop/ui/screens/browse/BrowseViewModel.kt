@@ -19,9 +19,10 @@ data class BrowseState(
 
 class BrowseViewModel(
     private val scope: CoroutineScope,
+    initialFilters: BrowseFilters = BrowseFilters(),
     private val fetch: suspend (BrowseFilters, Int) -> BrowsePage = BrowseRepository()::discover,
 ) {
-    private val mutableState = MutableStateFlow(BrowseState())
+    private val mutableState = MutableStateFlow(BrowseState(filters = initialFilters))
     val state = mutableState.asStateFlow()
     private var job: Job? = null
     private var generation = 0

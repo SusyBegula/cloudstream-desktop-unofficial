@@ -21,7 +21,7 @@ import com.lagradost.cloudstream3.desktop.utils.PlaywrightManager
 import kotlinx.coroutines.launch
 
 @Composable
-fun SettingsAdvanced() {
+fun SettingsAdvanced(onErrorLogs: () -> Unit = {}) {
     val scope = rememberCoroutineScope()
     val isBrowserInstalled by PlaywrightManager.isInstalled.collectAsState()
     val isBrowserDownloading by PlaywrightManager.isDownloading.collectAsState()
@@ -29,6 +29,7 @@ fun SettingsAdvanced() {
     val isBrowserDownloaded by PlaywrightManager.isDownloaded.collectAsState()
 
     Column(modifier = Modifier.fillMaxSize().verticalScroll(androidx.compose.foundation.rememberScrollState())) {
+        TextButton(onClick = onErrorLogs) { Text("View error logs") }
         Card(
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
             modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
@@ -41,7 +42,7 @@ fun SettingsAdvanced() {
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text("Enable Advanced Global Search", modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface)
-                    var isGlobalSearch by remember { mutableStateOf(com.lagradost.common.storage.DesktopDataStore.getKey<Boolean>("global_search_enabled") ?: false) }
+                    var isGlobalSearch by remember { mutableStateOf(com.lagradost.common.storage.DesktopDataStore.getKey<Boolean>("global_search_enabled") ?: true) }
                     Switch(
                         checked = isGlobalSearch,
                         onCheckedChange = {

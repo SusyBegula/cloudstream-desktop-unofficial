@@ -1,28 +1,38 @@
 package com.lagradost.cloudstream3.desktop.ui.screens.browse
 
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.*
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import coil3.compose.AsyncImage
 import com.lagradost.cloudstream3.APIHolder
 import com.lagradost.cloudstream3.MainAPI
 import com.lagradost.cloudstream3.SearchResponse
+import com.lagradost.cloudstream3.desktop.ui.components.DesktopUi
 import com.lagradost.cloudstream3.desktop.ui.navigation.NavController
 import com.lagradost.cloudstream3.desktop.ui.navigation.Screen
+import com.lagradost.cloudstream3.desktop.ui.screens.home.HomeViewModel
+import com.lagradost.cloudstream3.desktop.ui.screens.home.PREF_SELECTED_PROVIDER
 import com.lagradost.cloudstream3.desktop.ui.screens.home.isRealProvider
 import com.lagradost.cloudstream3.desktop.ui.theme.AppearanceConfig
 import kotlinx.coroutines.CancellationException
@@ -30,6 +40,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
@@ -39,10 +50,27 @@ import java.util.Locale
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun BrowseScreen(navController: NavController, viewModel: BrowseViewModel, gridState: LazyGridState) {
+fun BrowseScreen(
+    navController: NavController,
+    viewModel: BrowseViewModel,
+    gridState: LazyGridState,
+    categoryPage: BrowseCategory? = null,
+    homeViewModel: HomeViewModel? = null,
+) {
     val state by viewModel.state.collectAsState()
     val filters = state.filters
     var selected by remember { mutableStateOf<BrowseTitle?>(null) }
+    var fallbackNotice by remember { mutableStateOf<String?>(null) }
+    var resolvingTitleKey by remember { mutableStateOf<String?>(null) }
+    val coroutineScope = rememberCoroutineScope()
+
+    val selectedProvider by (homeViewModel?.selectedProvider ?: remember {
+        val saved = com.lagradost.common.storage.DesktopDataStore.getKey<String>(PREF_SELECTED_PROVIDER)
+        val prov = APIHolder.allProviders.firstOrNull { it.name == saved && it.isRealProvider() }
+            ?: APIHolder.allProviders.firstOrNull { it.isRealProvider() }
+        kotlinx.coroutines.flow.MutableStateFlow(prov)
+    }).collectAsState()
+
     val gridScale by AppearanceConfig.gridScale.collectAsState()
     val minSize = when (gridScale) {
         "Compact" -> 140.dp
@@ -67,9 +95,9 @@ fun BrowseScreen(navController: NavController, viewModel: BrowseViewModel, gridS
     ) {
         item(span = { GridItemSpan(maxLineSpan) }) {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Browse", style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold)
+                Text(categoryPage?.headerTitle ?: "Browser", style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold)
                 Text("Discover your next movie, show or anime.", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                if (categoryPage == null) FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     BrowseCategory.entries.forEach { category ->
                         FilterChip(selected = filters.category == category, onClick = {
                             viewModel.setFilters(filters.copy(category = category, genre = null))
@@ -79,66 +107,163 @@ fun BrowseScreen(navController: NavController, viewModel: BrowseViewModel, gridS
             }
         }
         item(span = { GridItemSpan(maxLineSpan) }) {
-            Surface(shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.surfaceContainer) {
-                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            val hasActiveFilters = filters.genre != null ||
+                filters.ageRating != null ||
+                filters.year != null ||
+                filters.minRating > 0 ||
+                (filters.language != null && filters.language != "en") ||
+                filters.sort != BrowseSort.POPULAR ||
+                (filters.category == BrowseCategory.ANIME && filters.animeMovies)
+
+            Surface(
+                shape = RoundedCornerShape(16.dp),
+                color = DesktopUi.SurfaceCard.copy(alpha = 0.65f),
+                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.08f)),
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 18.dp, vertical = 14.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
                         if (filters.category == BrowseCategory.ANIME) {
-                            BrowseDropdown("Format", if (filters.animeMovies) "Movies" else "Shows", listOf(false to "Shows", true to "Movies")) {
+                            BrowseFilterChip(
+                                label = "Format",
+                                value = if (filters.animeMovies) "Movies" else "Shows",
+                                isActive = filters.animeMovies,
+                                selectedKey = filters.animeMovies,
+                                options = listOf(false to "Shows", true to "Movies"),
+                            ) {
                                 viewModel.setFilters(filters.copy(animeMovies = it, genre = null))
                             }
                         }
-                        BrowseDropdown(
-                            "Genre",
-                            filters.genres.firstOrNull { it.id == filters.genre }?.label ?: "All genres",
-                            listOf(null to "All genres") + filters.genres.map { it.id to it.label },
+
+                        val selectedGenre = filters.genres.firstOrNull { it.id == filters.genre }
+                        BrowseFilterChip(
+                            label = "Genre",
+                            value = selectedGenre?.label ?: "All genres",
+                            isActive = filters.genre != null,
+                            selectedKey = filters.genre,
+                            options = listOf(null to "All genres") + filters.genres.map { it.id to it.label },
                         ) {
                             viewModel.setFilters(filters.copy(genre = it))
                         }
-                        BrowseDropdown(
-                            "Age rating",
-                            findAgeRating(filters.ageRating)?.label ?: "All ratings",
-                            listOf(null to "All ratings") + filters.ageRatings.map { it.id to it.label },
+
+                        val selectedAgeRating = findAgeRating(filters.ageRating)
+                        BrowseFilterChip(
+                            label = "Age rating",
+                            value = selectedAgeRating?.label ?: "All ratings",
+                            isActive = filters.ageRating != null,
+                            selectedKey = filters.ageRating,
+                            options = listOf(null to "All ratings") + filters.ageRatings.map { it.id to it.label },
                         ) {
                             viewModel.setFilters(filters.copy(ageRating = it))
                         }
-                        BrowseDropdown(
-                            "Year",
-                            filters.year?.toString() ?: "Any year",
-                            listOf(null to "Any year") + (Year.now().value downTo 1900).map { it to it.toString() },
+
+                        BrowseFilterChip(
+                            label = "Year",
+                            value = filters.year?.toString() ?: "Any year",
+                            isActive = filters.year != null,
+                            selectedKey = filters.year,
+                            options = listOf(null to "Any year") + (Year.now().value downTo 1900).map { it to it.toString() },
                         ) {
                             viewModel.setFilters(filters.copy(year = it))
                         }
-                        BrowseDropdown(
-                            "TMDB rating",
-                            if (filters.minRating == 0) "Any rating" else "${filters.minRating}+",
-                            listOf(0 to "Any rating") + (5..9).map { it to "$it+" },
+
+                        BrowseFilterChip(
+                            label = "TMDB rating",
+                            value = if (filters.minRating == 0) "Any rating" else "${filters.minRating}+ ★",
+                            isActive = filters.minRating > 0,
+                            selectedKey = filters.minRating,
+                            options = listOf(0 to "Any rating") + (5..9).map { it to "$it+ ★" },
                         ) {
                             viewModel.setFilters(filters.copy(minRating = it))
                         }
+
                         if (filters.category != BrowseCategory.ANIME) {
                             val languages = listOf(
                                 null to "Any language", "en" to "English", "hi" to "Hindi", "ja" to "Japanese",
                                 "ko" to "Korean", "es" to "Spanish", "fr" to "French", "de" to "German", "zh" to "Chinese",
                                 "ta" to "Tamil", "te" to "Telugu", "ml" to "Malayalam", "kn" to "Kannada",
                             )
-                            BrowseDropdown("Original language", languages.first { it.first == filters.language }.second, languages) {
+                            val selectedLang = languages.firstOrNull { it.first == filters.language }?.second ?: "Any language"
+                            BrowseFilterChip(
+                                label = "Language",
+                                value = selectedLang,
+                                isActive = filters.language != null && filters.language != "en",
+                                selectedKey = filters.language,
+                                options = languages,
+                            ) {
                                 viewModel.setFilters(filters.copy(language = it))
                             }
                         }
-                        BrowseDropdown("Sort by", filters.sort.label, BrowseSort.entries.map { it to it.label }) {
+
+                        BrowseFilterChip(
+                            label = "Sort by",
+                            value = filters.sort.label,
+                            isActive = filters.sort != BrowseSort.POPULAR,
+                            selectedKey = filters.sort,
+                            options = BrowseSort.entries.map { it to it.label },
+                        ) {
                             viewModel.setFilters(filters.copy(sort = it))
                         }
-                        TextButton(onClick = { viewModel.setFilters(BrowseFilters(category = filters.category)) }) { Text("Reset filters") }
+
+                        if (hasActiveFilters) {
+                            Surface(
+                                onClick = { viewModel.setFilters(BrowseFilters(category = filters.category)) },
+                                shape = RoundedCornerShape(10.dp),
+                                color = Color.Red.copy(alpha = 0.12f),
+                                border = BorderStroke(1.dp, Color.Red.copy(alpha = 0.35f)),
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Close,
+                                        contentDescription = "Reset filters",
+                                        modifier = Modifier.size(14.dp),
+                                        tint = Color(0xFFFF6B6B),
+                                    )
+                                    Text(
+                                        text = "Reset filters",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = Color(0xFFFF6B6B),
+                                    )
+                                }
+                            }
+                        }
                     }
-                    Text(
-                        buildString {
-                            append("Catalog and ratings from TMDB")
-                            if (filters.category == BrowseCategory.ANIME) append(" · Japanese animation")
-                            if (filters.sort == BrowseSort.RATING || filters.minRating > 0) append(" · At least 100 votes")
-                        },
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            text = buildString {
+                                append("Catalog and ratings from TMDB")
+                                if (filters.category == BrowseCategory.ANIME) append(" · Japanese animation")
+                                if (filters.sort == BrowseSort.RATING || filters.minRating > 0) append(" · At least 100 votes")
+                            },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = DesktopUi.TextMuted,
+                        )
+                        if (state.titles.isNotEmpty()) {
+                            Text(
+                                text = "${state.totalResults} titles",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = DesktopUi.TextMuted,
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -151,7 +276,56 @@ fun BrowseScreen(navController: NavController, viewModel: BrowseViewModel, gridS
                 )
             }
         }
-        items(state.titles, key = { it.key }) { title -> BrowseCard(title) { selected = title } }
+        items(state.titles, key = { it.key }) { title ->
+            BrowseCard(
+                title = title,
+                isLoading = resolvingTitleKey == title.key,
+                onClick = {
+                    val provider = selectedProvider
+                    if (provider != null) {
+                        coroutineScope.launch {
+                            resolvingTitleKey = title.key
+                            try {
+                                val searchResponse = withContext(Dispatchers.IO) {
+                                    withTimeoutOrNull(15_000) {
+                                        provider.search(title.name, 1)
+                                    }
+                                }
+                                val items = searchResponse?.items.orEmpty()
+                                val match = items.firstOrNull { it.name.trim().equals(title.name.trim(), ignoreCase = true) }
+                                    ?: items.firstOrNull { it.name.contains(title.name.trim(), ignoreCase = true) }
+                                    ?: items.firstOrNull()
+
+                                if (match != null) {
+                                    navController.navigate(
+                                        Screen.Details(
+                                            provider = provider,
+                                            url = match.url,
+                                            preloadedName = match.name,
+                                            preloadedPoster = match.posterUrl ?: title.poster,
+                                        )
+                                    )
+                                } else {
+                                    fallbackNotice = "Could not find “${title.name}” on ${provider.name}. Choose from another provider below:"
+                                    selected = title
+                                }
+                            } catch (e: CancellationException) {
+                                throw e
+                            } catch (e: Exception) {
+                                com.lagradost.common.logging.AppLogger.e("BrowseScreen: Failed to resolve ${title.name} on ${provider.name}", e)
+                                fallbackNotice = "Error connecting to ${provider.name}. Choose from another provider below:"
+                                selected = title
+                            } finally {
+                                resolvingTitleKey = null
+                            }
+                        }
+                    } else {
+                        fallbackNotice = null
+                        selected = title
+                    }
+                },
+            )
+        }
         item(span = { GridItemSpan(maxLineSpan) }) {
             Column(
                 Modifier.fillMaxWidth().padding(24.dp),
@@ -178,41 +352,130 @@ fun BrowseScreen(navController: NavController, viewModel: BrowseViewModel, gridS
         }
     }
     selected?.let { title ->
-        BrowseSourcesDialog(title, onDismiss = { selected = null }, onExtensions = {
-            selected = null
-            navController.navigate(Screen.Extensions)
-        }, onSelect = { provider, result ->
-            selected = null
-            navController.navigate(Screen.Details(provider, result.url, result.name, result.posterUrl ?: title.poster))
-        })
+        BrowseSourcesDialog(
+            title = title,
+            notice = fallbackNotice,
+            onDismiss = {
+                selected = null
+                fallbackNotice = null
+            },
+            onExtensions = {
+                selected = null
+                fallbackNotice = null
+                navController.navigate(Screen.Extensions)
+            },
+            onSelect = { provider, result ->
+                selected = null
+                fallbackNotice = null
+                navController.navigate(Screen.Details(provider, result.url, result.name, result.posterUrl ?: title.poster))
+            },
+        )
     }
 }
 
 @Composable
-private fun <T> BrowseDropdown(label: String, value: String, options: List<Pair<T, String>>, onSelect: (T) -> Unit) {
+private fun <T> BrowseFilterChip(
+    label: String,
+    value: String,
+    isActive: Boolean,
+    selectedKey: T,
+    options: List<Pair<T, String>>,
+    onSelect: (T) -> Unit,
+) {
     var expanded by remember { mutableStateOf(false) }
-    Column {
-        Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Box {
-            OutlinedButton(onClick = { expanded = true }) {
-                Text(value)
-                Icon(Icons.Default.ExpandMore, contentDescription = null, modifier = Modifier.padding(start = 8.dp).size(18.dp))
+
+    Box {
+        Surface(
+            onClick = { expanded = true },
+            shape = RoundedCornerShape(10.dp),
+            color = if (isActive) DesktopUi.Accent.copy(alpha = 0.14f) else DesktopUi.SurfaceElevated.copy(alpha = 0.65f),
+            border = BorderStroke(
+                1.dp,
+                if (isActive) DesktopUi.Accent.copy(alpha = 0.55f) else Color.White.copy(alpha = 0.12f),
+            ),
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = if (isActive) DesktopUi.Accent else DesktopUi.TextMuted,
+                    fontWeight = FontWeight.Medium,
+                )
+                Text(
+                    text = "·",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = if (isActive) DesktopUi.Accent.copy(alpha = 0.6f) else DesktopUi.TextMuted.copy(alpha = 0.4f),
+                )
+                Text(
+                    text = value,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = if (isActive) DesktopUi.Accent else DesktopUi.TextPrimary,
+                    fontWeight = if (isActive) FontWeight.SemiBold else FontWeight.Medium,
+                    maxLines = 1,
+                )
+                Icon(
+                    imageVector = Icons.Default.KeyboardArrowDown,
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp),
+                    tint = if (isActive) DesktopUi.Accent else DesktopUi.TextMuted.copy(alpha = 0.8f),
+                )
             }
-            DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }, modifier = Modifier.heightIn(max = 320.dp)) {
-                options.forEach { (key, text) ->
-                    DropdownMenuItem(text = { Text(text) }, onClick = {
+        }
+
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+            modifier = Modifier.heightIn(max = 340.dp),
+        ) {
+            options.forEach { (key, text) ->
+                val isSelected = key == selectedKey
+                DropdownMenuItem(
+                    text = {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            if (isSelected) {
+                                Icon(
+                                    Icons.Default.Check,
+                                    contentDescription = null,
+                                    tint = DesktopUi.Accent,
+                                    modifier = Modifier.size(16.dp),
+                                )
+                            }
+                            Text(
+                                text = text,
+                                color = if (isSelected) DesktopUi.Accent else Color.Unspecified,
+                                fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
+                            )
+                        }
+                    },
+                    onClick = {
                         expanded = false
                         onSelect(key)
-                    })
-                }
+                    },
+                )
             }
         }
     }
 }
 
 @Composable
-private fun BrowseCard(title: BrowseTitle, onClick: () -> Unit) {
-    Card(onClick = onClick, shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth()) {
+private fun BrowseCard(
+    title: BrowseTitle,
+    isLoading: Boolean = false,
+    onClick: () -> Unit,
+) {
+    Card(
+        onClick = onClick,
+        enabled = !isLoading,
+        shape = RoundedCornerShape(12.dp),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
         Box(Modifier.fillMaxWidth().aspectRatio(2f / 3f), contentAlignment = Alignment.Center) {
             Icon(Icons.Default.Movie, contentDescription = null, modifier = Modifier.size(40.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
             if (title.poster != null) {
@@ -222,6 +485,20 @@ private fun BrowseCard(title: BrowseTitle, onClick: () -> Unit) {
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize(),
                 )
+            }
+            if (isLoading) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Color.Black.copy(alpha = 0.65f)),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(36.dp),
+                        color = MaterialTheme.colorScheme.primary,
+                        strokeWidth = 3.dp,
+                    )
+                }
             }
         }
         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -245,6 +522,7 @@ private data class ProviderMatches(val provider: MainAPI, val titles: List<Searc
 @Composable
 private fun BrowseSourcesDialog(
     title: BrowseTitle,
+    notice: String? = null,
     onDismiss: () -> Unit,
     onExtensions: () -> Unit,
     onSelect: (MainAPI, SearchResponse) -> Unit,
@@ -292,6 +570,20 @@ private fun BrowseSourcesDialog(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 if (title.overview.isNotBlank()) Text(title.overview, maxLines = 4, overflow = TextOverflow.Ellipsis)
+                if (notice != null) {
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.7f),
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(
+                            notice,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onErrorContainer,
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                        )
+                    }
+                }
                 HorizontalDivider()
                 if (providers.isEmpty()) {
                     Text("Install a content provider to find this title and watch it.")

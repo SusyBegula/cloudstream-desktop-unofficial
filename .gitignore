@@ -16,6 +16,7 @@ desktop-app/mpv/
 desktop-app/appResources/
 *.jar
 *.cs3
+*.zip
 
 # Exceptions
 !gradle/wrapper/gradle-wrapper.jar

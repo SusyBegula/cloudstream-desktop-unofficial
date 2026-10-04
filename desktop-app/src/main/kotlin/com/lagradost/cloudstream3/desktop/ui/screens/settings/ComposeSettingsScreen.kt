@@ -13,14 +13,13 @@ import com.lagradost.cloudstream3.desktop.ui.navigation.NavController
 
 enum class SettingsTab(val title: String) {
     PLAYER("Player"),
-    APPEARANCE("Appearance"),
     NETWORK("Network"),
     ADVANCED("Advanced"),
     ABOUT("About"),
 }
 
 @Composable
-fun ComposeSettingsScreen(navController: NavController) {
+fun ComposeSettingsScreen(navController: NavController, onErrorLogs: () -> Unit = {}) {
     var selectedTab by remember { mutableStateOf(SettingsTab.PLAYER) }
 
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
@@ -69,9 +68,8 @@ fun ComposeSettingsScreen(navController: NavController) {
             Box(modifier = Modifier.fillMaxSize()) {
                 when (selectedTab) {
                     SettingsTab.PLAYER -> SettingsPlayer()
-                    SettingsTab.APPEARANCE -> SettingsAppearance()
                     SettingsTab.NETWORK -> SettingsNetwork()
-                    SettingsTab.ADVANCED -> SettingsAdvanced()
+                    SettingsTab.ADVANCED -> SettingsAdvanced(onErrorLogs)
                     SettingsTab.ABOUT -> SettingsAbout()
                 }
             }

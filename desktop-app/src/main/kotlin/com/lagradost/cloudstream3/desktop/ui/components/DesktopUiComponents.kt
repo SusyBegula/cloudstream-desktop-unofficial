@@ -123,6 +123,7 @@ fun CategoryRowWithHeader(
     itemCount: Int,
     scrollStep: Int = 4,
     isInfinite: Boolean = false,
+    rowContentPadding: PaddingValues = PaddingValues(start = 16.dp, end = 16.dp),
     onViewAll: (() -> Unit)? = null,
     trailingHeaderExtra: @Composable (() -> Unit)? = null,
     content: LazyListScope.() -> Unit,
@@ -194,7 +195,7 @@ fun CategoryRowWithHeader(
             state = listState,
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
-            contentPadding = PaddingValues(start = 16.dp, end = 16.dp),
+            contentPadding = rowContentPadding,
             content = content,
         )
     }

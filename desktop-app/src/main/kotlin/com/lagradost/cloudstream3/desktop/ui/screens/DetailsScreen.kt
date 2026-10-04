@@ -279,7 +279,7 @@ fun DetailsContent(
                 Box(modifier = Modifier.fillMaxWidth()) {
                     DetailsBackdrop(provider = provider, data = data, scrollState = scrollState, hazeState = hazeState)
                     Column(modifier = Modifier.fillMaxWidth()) {
-                        Spacer(modifier = Modifier.fillMaxWidth().aspectRatio(16f / 2.0f))
+                        Spacer(modifier = Modifier.fillMaxWidth().heightIn(min = com.lagradost.cloudstream3.desktop.ui.LocalAppHeaderHeight.current).aspectRatio(16f / 2.0f))
                         DetailsMetadata(provider = provider, data = data, hazeState = hazeState)
                         Spacer(modifier = Modifier.height(32.dp))
                     }

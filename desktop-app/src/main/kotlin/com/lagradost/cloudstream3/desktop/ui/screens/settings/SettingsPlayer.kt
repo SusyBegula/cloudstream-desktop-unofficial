@@ -1,6 +1,8 @@
 package com.lagradost.cloudstream3.desktop.ui.screens.settings
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -24,10 +26,16 @@ fun SettingsPlayer() {
     var autoPlayNextEpisodeSeconds by remember { mutableStateOf(DesktopDataStore.getKey<String>(PlayerConfig.PREF_AUTO_PLAY_NEXT_EPISODE_SECONDS) ?: "3") }
     var autoFullscreen by remember { mutableStateOf(DesktopDataStore.getKey<Boolean>(PlayerConfig.PREF_AUTO_FULLSCREEN) ?: true) }
 
-    Card(
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-        modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(bottom = 32.dp),
     ) {
+        Card(
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+            modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
+        ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text("Video Player Options", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.SemiBold)
             Spacer(modifier = Modifier.height(16.dp))
@@ -193,6 +201,7 @@ fun SettingsPlayer() {
             )
         }
     }
+}
 }
 
 @Composable

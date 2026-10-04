@@ -8,6 +8,13 @@ import org.json.JSONObject
 import java.time.LocalDate
 
 enum class BrowseCategory(val label: String) { MOVIES("Movies"), SHOWS("Shows"), ANIME("Anime") }
+val BrowseCategory.headerTitle: String
+    get() = when (this) {
+        BrowseCategory.MOVIES -> "Movies"
+        BrowseCategory.SHOWS -> "TV-Shows"
+        BrowseCategory.ANIME -> "Animes"
+    }
+
 enum class BrowseSort(val label: String) {
     POPULAR("Most popular"),
     RATING("Highest rated"),

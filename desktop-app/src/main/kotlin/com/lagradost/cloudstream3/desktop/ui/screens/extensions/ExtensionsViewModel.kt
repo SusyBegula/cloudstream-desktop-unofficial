@@ -29,7 +29,7 @@ class ExtensionsViewModel(private val coroutineScope: CoroutineScope) {
     private val _isFetching = MutableStateFlow(false)
     val isFetching = _isFetching.asStateFlow()
 
-    private val _statusText = MutableStateFlow("Press Sync (sidebar) or Fetch below to load plugins from your repositories.")
+    private val _statusText = MutableStateFlow("Press Sync Repos or Fetch below to load plugins from your repositories.")
     val statusText = _statusText.asStateFlow()
 
     private val _plugins = MutableStateFlow<List<Pair<String, SitePlugin>>>(emptyList())

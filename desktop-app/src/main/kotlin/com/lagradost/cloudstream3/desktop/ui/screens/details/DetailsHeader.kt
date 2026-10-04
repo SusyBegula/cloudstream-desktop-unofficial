@@ -24,8 +24,10 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import coil3.compose.SubcomposeAsyncImage
 import com.lagradost.cloudstream3.desktop.ui.components.DesktopUi
@@ -182,7 +184,7 @@ fun DetailsMetadata(provider: MainAPI, data: LoadResponse, hazeState: HazeState)
                         ) {
                             Icon(
                                 if (isBookmarked) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                                contentDescription = "Bookmark",
+                                contentDescription = if (isBookmarked) "Remove from favourites" else "Add to favourites",
                                 tint = if (isBookmarked) Color.Red else Color.White,
                                 modifier = Modifier.size(28.dp),
                             )
@@ -204,7 +206,13 @@ fun DetailsMetadata(provider: MainAPI, data: LoadResponse, hazeState: HazeState)
                                     Text(
                                         tag,
                                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                                        style = MaterialTheme.typography.bodySmall,
+                                        style = MaterialTheme.typography.bodySmall.copy(
+                                            lineHeight = 14.sp,
+                                            lineHeightStyle = LineHeightStyle(
+                                                alignment = LineHeightStyle.Alignment.Center,
+                                                trim = LineHeightStyle.Trim.Both,
+                                            ),
+                                        ),
                                         color = MaterialTheme.colorScheme.onSurface,
                                     )
                                 }
