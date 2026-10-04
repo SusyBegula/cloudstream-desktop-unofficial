@@ -174,93 +174,156 @@ object GlobalDetailsCache {
                         .lowercase()
                 }
 
-                val cleanName = cleanTitle(loaded.name)
-                val encodedQuery = java.net.URLEncoder.encode(cleanName, "UTF-8")
-                val searchUrl = "https://api.themoviedb.org/3/search/multi?query=$encodedQuery&api_key=$tmdbApiKey"
-                val searchJsonStr = try {
-                    com.lagradost.cloudstream3.app.get(searchUrl).text
-                } catch (e: Exception) {
-                    val encodedRaw = java.net.URLEncoder.encode(loaded.name.trim(), "UTF-8")
-                    com.lagradost.cloudstream3.app.get("https://api.themoviedb.org/3/search/multi?query=$encodedRaw&api_key=$tmdbApiKey").text
+                val isLoadedTv = when (loaded.type) {
+                    TvType.TvSeries, TvType.Anime, TvType.Cartoon, TvType.OVA -> true
+                    TvType.Movie, TvType.AnimeMovie, TvType.Torrent -> false
+                    else -> loaded is TvSeriesLoadResponse || (loaded is AnimeLoadResponse && loaded.type != TvType.AnimeMovie)
                 }
 
-                val searchObj = JSONObject(searchJsonStr)
-                val resultsArr = searchObj.optJSONArray("results") ?: org.json.JSONArray()
-                val normClean = normalizeForMatch(cleanName)
+                val isLoadedAnime = when (loaded.type) {
+                    TvType.Anime, TvType.AnimeMovie -> true
+                    TvType.TvSeries, TvType.Movie, TvType.Live, TvType.Documentary -> false
+                    else -> (loaded is AnimeLoadResponse && loaded.type != TvType.TvSeries) ||
+                        loaded.tags?.any { it.contains("anime", ignoreCase = true) || it.contains("animation", ignoreCase = true) } == true ||
+                        loaded.name.contains("anime", ignoreCase = true)
+                }
 
-                val isLoadedAnime = loaded is AnimeLoadResponse || loaded.type == TvType.Anime || loaded.type == TvType.AnimeMovie ||
-                    loaded.tags?.any { it.contains("anime", ignoreCase = true) || it.contains("animation", ignoreCase = true) } == true ||
-                    loaded.name.contains("anime", ignoreCase = true)
-
-                val isLoadedTv = loaded is TvSeriesLoadResponse || loaded is AnimeLoadResponse || loaded.type == TvType.TvSeries || loaded.type == TvType.Anime
                 val loadedYear = loaded.year ?: Regex("""\((\d{4})\)""").find(loaded.name)?.groupValues?.get(1)?.toIntOrNull()
 
                 var matchedId: Int? = null
                 var matchedMediaType: String? = null
-                var bestScore = -10000
 
-                for (i in 0 until resultsArr.length()) {
-                    val item = resultsArr.getJSONObject(i)
-                    val mediaType = item.optString("media_type", "")
-                    if (mediaType != "tv" && mediaType != "movie") continue
+                // Fix 1: Prioritize Direct ID Resolution (TMDB ID or IMDb ID)
+                val existingTmdbId = try {
+                    LoadResponse.Companion.run { loaded.getTMDbId() }?.toIntOrNull()
+                } catch (_: Throwable) { null }
+                    ?: loaded.syncData["tmdb"]?.toIntOrNull()
+                    ?: Regex("""["']tmdb(?:Id)?["']\s*:\s*(\d+)""").find(url)?.groupValues?.get(1)?.toIntOrNull()
 
-                    val title = item.optString("name").ifBlank { item.optString("title", "") }
-                    val normTitle = normalizeForMatch(title)
-                    val yearStr = item.optString("first_air_date").ifBlank { item.optString("release_date", "") }
-                    val itemYear = yearStr.take(4).toIntOrNull()
-                    val genreIds = item.optJSONArray("genre_ids")?.let { arr -> (0 until arr.length()).map { arr.getInt(it) } } ?: emptyList()
-                    val isAnim = genreIds.contains(16) || item.optString("original_language") == "ja"
-                    val pop = item.optDouble("popularity", 0.0)
+                if (existingTmdbId != null && existingTmdbId > 0) {
+                    matchedId = existingTmdbId
+                    matchedMediaType = if (isLoadedTv) "tv" else "movie"
+                }
 
-                    var score = 0
-                    val isExact = normTitle == normClean ||
-                        normTitle.replace("shippuuden", "shippuden") == normClean.replace("shippuuden", "shippuden")
+                if (matchedId == null) {
+                    val existingImdbId = try {
+                        LoadResponse.Companion.run { loaded.getImdbId() }
+                    } catch (_: Throwable) { null }
+                        ?: loaded.syncData["imdb"]
+                        ?: Regex("""\b(tt\d{7,10})\b""").find(url)?.groupValues?.get(1)
+                        ?: Regex("""\b(tt\d{7,10})\b""").find(loaded.url)?.groupValues?.get(1)
 
-                    if (isExact) {
-                        score += 300
-                    } else if (normTitle.startsWith(normClean) || normClean.startsWith(normTitle)) {
-                        score += 100 - minOf(kotlin.math.abs(normTitle.length - normClean.length) * 2, 60)
-                    } else if (normTitle.contains(normClean) || normClean.contains(normTitle)) {
-                        score += 60 - minOf(kotlin.math.abs(normTitle.length - normClean.length) * 2, 40)
-                    } else {
-                        continue
-                    }
+                    if (!existingImdbId.isNullOrBlank()) {
+                        try {
+                            val findUrl = "https://api.themoviedb.org/3/find/$existingImdbId?external_source=imdb_id&api_key=$tmdbApiKey"
+                            val findJson = JSONObject(com.lagradost.cloudstream3.app.get(findUrl).text)
+                            val tvResults = findJson.optJSONArray("tv_results")
+                            val movieResults = findJson.optJSONArray("movie_results")
 
-                    if (isLoadedTv && mediaType == "tv") {
-                        score += 50
-                    } else if (!isLoadedTv && mediaType == "movie") {
-                        score += 50
-                    } else {
-                        score -= 30
-                    }
-
-                    if (isLoadedAnime) {
-                        if (isAnim) score += 100 else score -= 150
-                    } else {
-                        if (isAnim) score -= 120 else score += 30
-                    }
-
-                    if (loadedYear != null && itemYear != null) {
-                        if (loadedYear == itemYear) {
-                            score += 50
-                        } else {
-                            val diff = kotlin.math.abs(loadedYear - itemYear)
-                            val maxPenalty = if (isExact && isLoadedTv) 30 else 60
-                            score -= minOf(diff * 4, maxPenalty)
+                            if (isLoadedTv && tvResults != null && tvResults.length() > 0) {
+                                matchedId = tvResults.getJSONObject(0).optInt("id", 0).takeIf { it > 0 }
+                                matchedMediaType = "tv"
+                            } else if (!isLoadedTv && movieResults != null && movieResults.length() > 0) {
+                                matchedId = movieResults.getJSONObject(0).optInt("id", 0).takeIf { it > 0 }
+                                matchedMediaType = "movie"
+                            } else if (tvResults != null && tvResults.length() > 0) {
+                                matchedId = tvResults.getJSONObject(0).optInt("id", 0).takeIf { it > 0 }
+                                matchedMediaType = "tv"
+                            } else if (movieResults != null && movieResults.length() > 0) {
+                                matchedId = movieResults.getJSONObject(0).optInt("id", 0).takeIf { it > 0 }
+                                matchedMediaType = "movie"
+                            }
+                        } catch (e: Throwable) {
+                            com.lagradost.common.logging.AppLogger.e("Error finding TMDB by IMDb ID", e)
                         }
                     }
+                }
 
-                    score += minOf(pop.toInt(), 50)
+                // Fallback: Fuzzy multi-search if direct ID resolution wasn't available
+                if (matchedId == null) {
+                    fun stripPrefix(s: String) = s.replace(Regex("""^(marvels|disneys|dcs)"""), "")
 
-                    if (score > bestScore) {
-                        bestScore = score
-                        matchedId = item.optInt("id", 0).takeIf { it > 0 }
-                        matchedMediaType = mediaType
+                    val cleanName = cleanTitle(loaded.name)
+                    val encodedQuery = java.net.URLEncoder.encode(cleanName, "UTF-8")
+                    val searchUrl = "https://api.themoviedb.org/3/search/multi?query=$encodedQuery&api_key=$tmdbApiKey"
+                    val searchJsonStr = try {
+                        com.lagradost.cloudstream3.app.get(searchUrl).text
+                    } catch (e: Exception) {
+                        val encodedRaw = java.net.URLEncoder.encode(loaded.name.trim(), "UTF-8")
+                        com.lagradost.cloudstream3.app.get("https://api.themoviedb.org/3/search/multi?query=$encodedRaw&api_key=$tmdbApiKey").text
+                    }
+
+                    val searchObj = JSONObject(searchJsonStr)
+                    val resultsArr = searchObj.optJSONArray("results") ?: org.json.JSONArray()
+                    val normClean = normalizeForMatch(cleanName)
+                    val normCleanStripped = stripPrefix(normClean)
+
+                    var bestScore = -10000
+
+                    for (i in 0 until resultsArr.length()) {
+                        val item = resultsArr.getJSONObject(i)
+                        val mediaType = item.optString("media_type", "")
+                        if (mediaType != "tv" && mediaType != "movie") continue
+
+                        val title = item.optString("name").ifBlank { item.optString("title", "") }
+                        val normTitle = normalizeForMatch(title)
+                        val normTitleStripped = stripPrefix(normTitle)
+                        val yearStr = item.optString("first_air_date").ifBlank { item.optString("release_date", "") }
+                        val itemYear = yearStr.take(4).toIntOrNull()
+                        val genreIds = item.optJSONArray("genre_ids")?.let { arr -> (0 until arr.length()).map { arr.getInt(it) } } ?: emptyList()
+                        val isAnim = genreIds.contains(16) || item.optString("original_language") == "ja"
+                        val pop = item.optDouble("popularity", 0.0)
+
+                        var score = 0
+                        val isExact = normTitle == normClean || normTitleStripped == normCleanStripped ||
+                            normTitle.replace("shippuuden", "shippuden") == normClean.replace("shippuuden", "shippuden")
+
+                        if (isExact) {
+                            score += 300
+                        } else if (normTitle.startsWith(normClean) || normClean.startsWith(normTitle)) {
+                            score += 100 - minOf(kotlin.math.abs(normTitle.length - normClean.length) * 2, 60)
+                        } else if (normTitle.contains(normClean) || normClean.contains(normTitle)) {
+                            score += 60 - minOf(kotlin.math.abs(normTitle.length - normClean.length) * 2, 40)
+                        } else {
+                            continue
+                        }
+
+                        if (isLoadedTv && mediaType == "tv") {
+                            score += 50
+                        } else if (!isLoadedTv && mediaType == "movie") {
+                            score += 50
+                        } else {
+                            score -= 30
+                        }
+
+                        if (isLoadedAnime) {
+                            if (isAnim) score += 60 else score -= 60
+                        } else {
+                            if (isAnim) score -= 60 else score += 20
+                        }
+
+                        if (loadedYear != null && itemYear != null) {
+                            if (loadedYear == itemYear) {
+                                score += 50
+                            } else {
+                                val diff = kotlin.math.abs(loadedYear - itemYear)
+                                val maxPenalty = if (isExact && isLoadedTv) 30 else 60
+                                score -= minOf(diff * 6, maxPenalty)
+                            }
+                        }
+
+                        score += minOf(pop.toInt(), 50)
+
+                        if (score > bestScore) {
+                            bestScore = score
+                            matchedId = item.optInt("id", 0).takeIf { it > 0 }
+                            matchedMediaType = mediaType
+                        }
                     }
                 }
 
                 if (matchedId != null) {
-                    val isTv = matchedMediaType == "tv" || loaded is TvSeriesLoadResponse || loaded is AnimeLoadResponse
+                    val isTv = matchedMediaType == "tv" || (matchedMediaType == null && isLoadedTv)
 
                     if (isTv) {
                         val showUrl = "https://api.themoviedb.org/3/tv/$matchedId?api_key=$tmdbApiKey&append_to_response=credits,keywords"
