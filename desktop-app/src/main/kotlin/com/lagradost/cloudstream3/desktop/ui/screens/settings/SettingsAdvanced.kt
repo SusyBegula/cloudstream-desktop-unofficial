@@ -42,7 +42,7 @@ fun SettingsAdvanced(onErrorLogs: () -> Unit = {}) {
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text("Enable Advanced Global Search", modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface)
-                    var isGlobalSearch by remember { mutableStateOf(com.lagradost.common.storage.DesktopDataStore.getKey<Boolean>("global_search_enabled") ?: false) }
+                    var isGlobalSearch by remember { mutableStateOf(com.lagradost.common.storage.DesktopDataStore.getKey<Boolean>("global_search_enabled") ?: true) }
                     Switch(
                         checked = isGlobalSearch,
                         onCheckedChange = {

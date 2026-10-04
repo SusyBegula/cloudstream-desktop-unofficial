@@ -24,6 +24,7 @@ import coil3.compose.AsyncImage
 import com.lagradost.cloudstream3.APIHolder
 import com.lagradost.cloudstream3.desktop.ui.navigation.NavController
 import com.lagradost.cloudstream3.desktop.ui.navigation.Screen
+import com.lagradost.cloudstream3.desktop.ui.screens.browse.BrowseCategory
 import com.lagradost.common.storage.DesktopBookmark
 import com.lagradost.common.storage.DesktopDataStore
 
@@ -64,7 +65,7 @@ fun ComposeLibraryScreen(navController: NavController) {
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
                     )
                     Spacer(modifier = Modifier.height(24.dp))
-                    Button(onClick = { navController.navigate(Screen.Browse) }) {
+                    Button(onClick = { navController.navigate(Screen.Catalog(BrowseCategory.MOVIES)) }) {
                         Text("Explore titles")
                     }
                 }

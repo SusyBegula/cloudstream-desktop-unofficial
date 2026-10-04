@@ -20,8 +20,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import com.lagradost.cloudstream3.desktop.download.ActiveDownload
 import com.lagradost.cloudstream3.desktop.download.DownloadStatus
@@ -423,13 +425,30 @@ private fun DownloadedItemCard(
                         shape = RoundedCornerShape(4.dp),
                         color = Color(0xFF1B382B),
                     ) {
-                        Text(
-                            "✓ Downloaded",
-                            color = Color(0xFF81C784),
-                            style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                        )
+                        Row(
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.5.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        ) {
+                            Icon(
+                                Icons.Default.Check,
+                                contentDescription = null,
+                                tint = Color(0xFF81C784),
+                                modifier = Modifier.size(11.dp),
+                            )
+                            Text(
+                                "Downloaded",
+                                color = Color(0xFF81C784),
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    lineHeight = 11.sp,
+                                    lineHeightStyle = LineHeightStyle(
+                                        alignment = LineHeightStyle.Alignment.Center,
+                                        trim = LineHeightStyle.Trim.Both,
+                                    ),
+                                ),
+                                fontWeight = FontWeight.Bold,
+                            )
+                        }
                     }
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(

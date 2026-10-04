@@ -100,9 +100,13 @@ fun CloudstreamApp() {
                                     catalogViewModels.getValue(targetScreen.category),
                                     catalogGridStates.getValue(targetScreen.category),
                                     categoryPage = targetScreen.category,
+                                    homeViewModel = homeViewModel,
                                 )
                                 is Screen.Browse -> com.lagradost.cloudstream3.desktop.ui.screens.browse.BrowseScreen(
-                                    navController, browseViewModel, browseGridState,
+                                    navController,
+                                    browseViewModel,
+                                    browseGridState,
+                                    homeViewModel = homeViewModel,
                                 )
                                 is Screen.Extensions -> ComposeExtensionScreen(navController)
                                 is Screen.Library -> ComposeLibraryScreen(navController)

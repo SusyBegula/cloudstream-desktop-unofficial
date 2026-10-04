@@ -143,7 +143,7 @@ private fun AppHeader(
 private fun HeaderNavigation(current: Screen, onNavigate: (Screen) -> Unit) {
     val destinations = listOf("Home" to Screen.Home) +
         BrowseCategory.entries.map { it.headerTitle to Screen.Catalog(it) } +
-        listOf("Browser" to Screen.Browse, "Favourites" to Screen.Library)
+        listOf("Favourites" to Screen.Library)
     Row(
         Modifier.selectableGroup().horizontalScroll(rememberScrollState()),
         verticalAlignment = Alignment.CenterVertically,

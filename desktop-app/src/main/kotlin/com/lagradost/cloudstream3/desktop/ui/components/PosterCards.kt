@@ -17,7 +17,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -158,9 +160,9 @@ fun PosterCard(
                     border = BorderStroke(0.5.dp, Color.White.copy(alpha = 0.2f)),
                 ) {
                     Row(
-                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.5.dp),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(4.5.dp),
                     ) {
                         Box(
                             Modifier.size(6.dp).background(
@@ -177,6 +179,13 @@ fun PosterCard(
                             fontWeight = FontWeight.Bold,
                             color = Color.White,
                             letterSpacing = 0.5.sp,
+                            style = TextStyle(
+                                lineHeight = 9.5.sp,
+                                lineHeightStyle = LineHeightStyle(
+                                    alignment = LineHeightStyle.Alignment.Center,
+                                    trim = LineHeightStyle.Trim.Both,
+                                ),
+                            ),
                         )
                     }
                 }
@@ -210,9 +219,10 @@ fun PosterCard(
                         }
                     if (typeLabel != null) {
                         Box(
+                            contentAlignment = Alignment.Center,
                             modifier = Modifier
                                 .background(DesktopUi.Accent.copy(alpha = 0.85f), RoundedCornerShape(4.dp))
-                                .padding(horizontal = 5.dp, vertical = 2.dp),
+                                .padding(horizontal = 5.dp, vertical = 2.5.dp),
                         ) {
                             Text(
                                 text = typeLabel,
@@ -220,6 +230,13 @@ fun PosterCard(
                                 fontWeight = FontWeight.Bold,
                                 color = Color.White,
                                 letterSpacing = 0.5.sp,
+                                style = TextStyle(
+                                    lineHeight = 9.sp,
+                                    lineHeightStyle = LineHeightStyle(
+                                        alignment = LineHeightStyle.Alignment.Center,
+                                        trim = LineHeightStyle.Trim.Both,
+                                    ),
+                                ),
                             )
                         }
                         Spacer(Modifier.height(4.dp))

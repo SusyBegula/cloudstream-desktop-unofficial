@@ -50,7 +50,7 @@ class HomeViewModel(private val coroutineScope: CoroutineScope) {
     private var paginationJob: Job? = null
     private var searchGeneration = 0
     val searchQuery = MutableStateFlow("")
-    val isGlobalSearchEnabled = MutableStateFlow(false)
+    val isGlobalSearchEnabled = MutableStateFlow(true)
 
     private data class ProviderSearchState(
         val provider: MainAPI,
@@ -83,7 +83,7 @@ class HomeViewModel(private val coroutineScope: CoroutineScope) {
             }
         }
 
-        isGlobalSearchEnabled.value = DesktopDataStore.getKey<Boolean>(PREF_GLOBAL_SEARCH) ?: false
+        isGlobalSearchEnabled.value = DesktopDataStore.getKey<Boolean>(PREF_GLOBAL_SEARCH) ?: true
 
         // Poll for provider updates
         coroutineScope.launch {
@@ -157,7 +157,7 @@ class HomeViewModel(private val coroutineScope: CoroutineScope) {
     }
 
     fun refreshSearchPreference() {
-        isGlobalSearchEnabled.value = DesktopDataStore.getKey<Boolean>(PREF_GLOBAL_SEARCH) ?: false
+        isGlobalSearchEnabled.value = DesktopDataStore.getKey<Boolean>(PREF_GLOBAL_SEARCH) ?: true
     }
 
     private fun updateHistory() {

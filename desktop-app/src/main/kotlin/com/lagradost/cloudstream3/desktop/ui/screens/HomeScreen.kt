@@ -9,6 +9,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.lagradost.cloudstream3.desktop.ui.navigation.NavController
 import com.lagradost.cloudstream3.desktop.ui.navigation.Screen
+import com.lagradost.cloudstream3.desktop.ui.screens.browse.BrowseCategory
 import com.lagradost.cloudstream3.desktop.ui.screens.details.GlobalDetailsCache
 import com.lagradost.cloudstream3.desktop.ui.screens.home.*
 
@@ -99,7 +100,7 @@ fun ComposeHomeScreen(
                 Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text(if (selectedProvider == null) "Choose a provider to get started" else "No home page available for this provider.")
                     Text("Use the provider menu above, or explore the catalog.", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    OutlinedButton(onClick = { navController.navigate(Screen.Browse) }) { Text("Open Browser") }
+                    OutlinedButton(onClick = { navController.navigate(Screen.Catalog(BrowseCategory.MOVIES)) }) { Text("Explore Catalog") }
                     if (providers.isEmpty()) {
                         TextButton(onClick = { navController.navigate(Screen.Extensions) }) { Text("Install extensions") }
                     }
