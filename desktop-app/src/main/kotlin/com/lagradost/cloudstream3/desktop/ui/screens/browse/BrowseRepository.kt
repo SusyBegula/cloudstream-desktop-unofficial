@@ -16,6 +16,7 @@ enum class BrowseSort(val label: String) {
 }
 
 data class BrowseGenre(val id: Int, val label: String)
+data class BrowseAgeRating(val id: String, val label: String, val movieCert: String, val tvCert: String)
 
 data class BrowseFilters(
     val category: BrowseCategory = BrowseCategory.MOVIES,
@@ -25,10 +26,12 @@ data class BrowseFilters(
     val minRating: Int = 0,
     val language: String? = null,
     val sort: BrowseSort = BrowseSort.POPULAR,
+    val ageRating: String? = null,
 ) {
     val isMovie: Boolean get() = category == BrowseCategory.MOVIES || (category == BrowseCategory.ANIME && animeMovies)
     val genres: List<BrowseGenre> get() = (if (isMovie) movieGenres else tvGenres)
         .filterNot { category == BrowseCategory.ANIME && it.id == 16 }
+    val ageRatings: List<BrowseAgeRating> get() = availableAgeRatings
 }
 
 private val commonGenres = listOf(
@@ -61,6 +64,46 @@ private val tvGenres = (
         BrowseGenre(10768, "War & politics"),
     )
     ).sortedBy { it.label }
+
+val availableAgeRatings = listOf(
+    BrowseAgeRating("all", "All ages (G / TV-G)", "G", "TV-Y|TV-G"),
+    BrowseAgeRating("7+", "7+ (PG / TV-PG)", "PG", "TV-Y7|TV-PG"),
+    BrowseAgeRating("13+", "13+ (PG-13 / TV-14)", "PG-13", "TV-14"),
+    BrowseAgeRating("17+", "17+ (R / TV-MA)", "R", "TV-MA"),
+    BrowseAgeRating("18+", "18+ (NC-17 / Adults)", "NC-17", "TV-MA"),
+    BrowseAgeRating("NR", "Not rated (NR)", "NR", "NR"),
+)
+
+fun findAgeRating(ratingId: String?): BrowseAgeRating? {
+    if (ratingId == null) return null
+    return availableAgeRatings.firstOrNull {
+        it.id.equals(ratingId, ignoreCase = true) ||
+            it.movieCert.equals(ratingId, ignoreCase = true) ||
+            it.tvCert.split("|").any { c -> c.equals(ratingId, ignoreCase = true) }
+    }
+}
+
+internal fun resolveCertification(ratingId: String, isMovie: Boolean): String? {
+    val tier = availableAgeRatings.firstOrNull { it.id.equals(ratingId, ignoreCase = true) }
+    if (tier != null) {
+        return if (isMovie) tier.movieCert else tier.tvCert
+    }
+    return when (ratingId.uppercase()) {
+        "G" -> if (isMovie) "G" else "TV-Y|TV-G"
+        "PG" -> if (isMovie) "PG" else "TV-Y7|TV-PG"
+        "PG-13" -> if (isMovie) "PG-13" else "TV-14"
+        "R" -> if (isMovie) "R" else "TV-MA"
+        "NC-17" -> if (isMovie) "NC-17" else "TV-MA"
+        "TV-Y" -> if (isMovie) "G" else "TV-Y"
+        "TV-Y7" -> if (isMovie) "PG" else "TV-Y7"
+        "TV-G" -> if (isMovie) "G" else "TV-G"
+        "TV-PG" -> if (isMovie) "PG" else "TV-PG"
+        "TV-14" -> if (isMovie) "PG-13" else "TV-14"
+        "TV-MA" -> if (isMovie) "R" else "TV-MA"
+        "NR" -> "NR"
+        else -> null
+    }
+}
 
 data class BrowseTitle(
     val id: Int,
@@ -112,6 +155,12 @@ internal fun buildDiscoverUrl(filters: BrowseFilters, page: Int, today: LocalDat
         // Anime is represented by Japanese animation in TMDB's discovery catalog.
         val language = if (filters.category == BrowseCategory.ANIME) "ja" else filters.language
         language?.let { addQueryParameter("with_original_language", it) }
+        filters.ageRating?.let { rating ->
+            resolveCertification(rating, filters.isMovie)?.let { cert ->
+                addQueryParameter("certification_country", "US")
+                addQueryParameter("certification", cert)
+            }
+        }
         if (filters.minRating > 0) addQueryParameter("vote_average.gte", filters.minRating.toString())
         if (filters.sort == BrowseSort.RATING || filters.minRating > 0) addQueryParameter("vote_count.gte", "100")
     }.build().toString()

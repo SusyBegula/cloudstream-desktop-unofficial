@@ -95,6 +95,13 @@ fun BrowseScreen(navController: NavController, viewModel: BrowseViewModel, gridS
                             viewModel.setFilters(filters.copy(genre = it))
                         }
                         BrowseDropdown(
+                            "Age rating",
+                            findAgeRating(filters.ageRating)?.label ?: "All ratings",
+                            listOf(null to "All ratings") + filters.ageRatings.map { it.id to it.label },
+                        ) {
+                            viewModel.setFilters(filters.copy(ageRating = it))
+                        }
+                        BrowseDropdown(
                             "Year",
                             filters.year?.toString() ?: "Any year",
                             listOf(null to "Any year") + (Year.now().value downTo 1900).map { it to it.toString() },
@@ -162,7 +169,7 @@ fun BrowseScreen(navController: NavController, viewModel: BrowseViewModel, gridS
                     }
                     state.titles.isEmpty() -> {
                         Text("No titles match these filters.", style = MaterialTheme.typography.titleMedium)
-                        Text("Try another genre, year or rating.")
+                        Text("Try another genre, age rating, year or rating.")
                         OutlinedButton(onClick = { viewModel.setFilters(BrowseFilters(category = filters.category)) }) { Text("Reset filters") }
                     }
                     state.page < state.totalPages -> OutlinedButton(onClick = viewModel::loadMore) { Text("Load more") }

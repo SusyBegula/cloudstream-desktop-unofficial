@@ -51,6 +51,54 @@ class BrowseTest {
     }
 
     @Test
+    fun ageRatingFilterAppliesCertificationParameters() {
+        val movieUrl = buildDiscoverUrl(BrowseFilters(ageRating = "13+"), 1).toHttpUrl()
+        assertEquals("/3/discover/movie", movieUrl.encodedPath)
+        assertEquals("US", movieUrl.queryParameter("certification_country"))
+        assertEquals("PG-13", movieUrl.queryParameter("certification"))
+
+        val tvUrl = buildDiscoverUrl(BrowseFilters(category = BrowseCategory.SHOWS, ageRating = "13+"), 1).toHttpUrl()
+        assertEquals("/3/discover/tv", tvUrl.encodedPath)
+        assertEquals("US", tvUrl.queryParameter("certification_country"))
+        assertEquals("TV-14", tvUrl.queryParameter("certification"))
+
+        val animeUrl = buildDiscoverUrl(BrowseFilters(category = BrowseCategory.ANIME, ageRating = "13+"), 1).toHttpUrl()
+        assertEquals("/3/discover/tv", animeUrl.encodedPath)
+        assertEquals("US", animeUrl.queryParameter("certification_country"))
+        assertEquals("TV-14", animeUrl.queryParameter("certification"))
+
+        val animeMovieUrl = buildDiscoverUrl(BrowseFilters(category = BrowseCategory.ANIME, animeMovies = true, ageRating = "13+"), 1).toHttpUrl()
+        assertEquals("/3/discover/movie", animeMovieUrl.encodedPath)
+        assertEquals("US", animeMovieUrl.queryParameter("certification_country"))
+        assertEquals("PG-13", animeMovieUrl.queryParameter("certification"))
+    }
+
+    @Test
+    fun directCertificationCodesAreMappedAcrossFormats() {
+        val tvFromMovieCode = buildDiscoverUrl(BrowseFilters(category = BrowseCategory.SHOWS, ageRating = "R"), 1).toHttpUrl()
+        assertEquals("US", tvFromMovieCode.queryParameter("certification_country"))
+        assertEquals("TV-MA", tvFromMovieCode.queryParameter("certification"))
+
+        val movieFromTvCode = buildDiscoverUrl(BrowseFilters(category = BrowseCategory.MOVIES, ageRating = "TV-14"), 1).toHttpUrl()
+        assertEquals("US", movieFromTvCode.queryParameter("certification_country"))
+        assertEquals("PG-13", movieFromTvCode.queryParameter("certification"))
+
+        val unknownRating = buildDiscoverUrl(BrowseFilters(ageRating = "xyz"), 1).toHttpUrl()
+        assertNull(unknownRating.queryParameter("certification_country"))
+        assertNull(unknownRating.queryParameter("certification"))
+    }
+
+    @Test
+    fun findAgeRatingResolvesTiersAndCodes() {
+        assertEquals("13+", findAgeRating("13+")?.id)
+        assertEquals("13+", findAgeRating("PG-13")?.id)
+        assertEquals("13+", findAgeRating("TV-14")?.id)
+        assertEquals("17+", findAgeRating("R")?.id)
+        assertEquals("17+", findAgeRating("TV-MA")?.id)
+        assertNull(findAgeRating("non-existent"))
+    }
+
+    @Test
     fun parsesMissingMetadataAndSkipsInvalidTitles() {
         val page = parseDiscoverPage(
             """{
