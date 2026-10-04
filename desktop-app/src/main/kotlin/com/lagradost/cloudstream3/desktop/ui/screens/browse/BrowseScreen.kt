@@ -39,7 +39,12 @@ import java.util.Locale
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun BrowseScreen(navController: NavController, viewModel: BrowseViewModel, gridState: LazyGridState) {
+fun BrowseScreen(
+    navController: NavController,
+    viewModel: BrowseViewModel,
+    gridState: LazyGridState,
+    categoryPage: BrowseCategory? = null,
+) {
     val state by viewModel.state.collectAsState()
     val filters = state.filters
     var selected by remember { mutableStateOf<BrowseTitle?>(null) }
@@ -67,9 +72,9 @@ fun BrowseScreen(navController: NavController, viewModel: BrowseViewModel, gridS
     ) {
         item(span = { GridItemSpan(maxLineSpan) }) {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Browse", style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold)
+                Text(categoryPage?.headerTitle ?: "Browser", style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold)
                 Text("Discover your next movie, show or anime.", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                if (categoryPage == null) FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     BrowseCategory.entries.forEach { category ->
                         FilterChip(selected = filters.category == category, onClick = {
                             viewModel.setFilters(filters.copy(category = category, genre = null))

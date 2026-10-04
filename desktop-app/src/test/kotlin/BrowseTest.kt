@@ -176,5 +176,31 @@ class BrowseTest {
         }
     }
 
+    @Test
+    fun dedicatedCatalogsKeepTheirOwnCategoryFiltersAndPages() {
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
+        try {
+            val requests = mutableListOf<BrowseCategory>()
+            val models = BrowseCategory.entries.associateWith { category ->
+                BrowseViewModel(scope, initialFilters = BrowseFilters(category = category)) { filters, page ->
+                    requests += filters.category
+                    BrowsePage(listOf(title(page)), page, 2, 2)
+                }
+            }
+            models.values.forEach { it.ensureLoaded() }
+            assertEquals(BrowseCategory.entries.toList(), requests)
+            val movies = models.getValue(BrowseCategory.MOVIES)
+            movies.setFilters(movies.state.value.filters.copy(year = 2020))
+            movies.loadMore()
+            models.getValue(BrowseCategory.ANIME).ensureLoaded()
+            assertEquals(2020, movies.state.value.filters.year)
+            assertEquals(2, movies.state.value.page)
+            assertEquals(BrowseCategory.ANIME, models.getValue(BrowseCategory.ANIME).state.value.filters.category)
+            assertNull(models.getValue(BrowseCategory.SHOWS).state.value.filters.year)
+        } finally {
+            scope.cancel()
+        }
+    }
+
     private fun title(id: Int) = BrowseTitle(id, "Title $id", true, null, "", 2020, 7.0)
 }

@@ -182,7 +182,7 @@ fun DetailsMetadata(provider: MainAPI, data: LoadResponse, hazeState: HazeState)
                         ) {
                             Icon(
                                 if (isBookmarked) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                                contentDescription = "Bookmark",
+                                contentDescription = if (isBookmarked) "Remove from favourites" else "Add to favourites",
                                 tint = if (isBookmarked) Color.Red else Color.White,
                                 modifier = Modifier.size(28.dp),
                             )

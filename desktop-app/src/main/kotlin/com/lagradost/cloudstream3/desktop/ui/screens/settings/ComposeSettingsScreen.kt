@@ -20,7 +20,7 @@ enum class SettingsTab(val title: String) {
 }
 
 @Composable
-fun ComposeSettingsScreen(navController: NavController) {
+fun ComposeSettingsScreen(navController: NavController, onErrorLogs: () -> Unit = {}) {
     var selectedTab by remember { mutableStateOf(SettingsTab.PLAYER) }
 
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
@@ -71,7 +71,7 @@ fun ComposeSettingsScreen(navController: NavController) {
                     SettingsTab.PLAYER -> SettingsPlayer()
                     SettingsTab.APPEARANCE -> SettingsAppearance()
                     SettingsTab.NETWORK -> SettingsNetwork()
-                    SettingsTab.ADVANCED -> SettingsAdvanced()
+                    SettingsTab.ADVANCED -> SettingsAdvanced(onErrorLogs)
                     SettingsTab.ABOUT -> SettingsAbout()
                 }
             }

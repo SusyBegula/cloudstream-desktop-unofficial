@@ -6,6 +6,8 @@ import com.lagradost.cloudstream3.SearchResponse
 sealed class Screen {
     object Home : Screen()
     object Browse : Screen()
+    object Search : Screen()
+    data class Catalog(val category: com.lagradost.cloudstream3.desktop.ui.screens.browse.BrowseCategory) : Screen()
     object Extensions : Screen()
     object Library : Screen()
     object Downloads : Screen()

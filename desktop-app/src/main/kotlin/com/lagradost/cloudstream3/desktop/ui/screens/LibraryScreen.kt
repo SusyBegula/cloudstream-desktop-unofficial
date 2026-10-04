@@ -41,61 +41,65 @@ fun ComposeLibraryScreen(navController: NavController) {
 
     var showError by remember { mutableStateOf<String?>(null) }
 
-    Box(modifier = Modifier.fillMaxSize()) {
-        if (bookmarksState.isEmpty()) {
-            Column(
-                modifier = Modifier.fillMaxSize(),
-                verticalArrangement = Arrangement.Center,
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                Text(
-                    "Your library is empty.",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    "Go bookmark some shows!",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-                )
-                Spacer(modifier = Modifier.height(24.dp))
-                Button(onClick = { navController.navigate(Screen.Home) }) {
-                    Text("Browse Shows")
-                }
-            }
-        } else {
-            val gridScale by com.lagradost.cloudstream3.desktop.ui.theme.AppearanceConfig.gridScale.collectAsState()
-            val minSize = when (gridScale) {
-                "Compact" -> 120.dp
-                "Large" -> 180.dp
-                else -> 150.dp
-            }
-
-            LazyVerticalGrid(
-                columns = GridCells.Adaptive(minSize = minSize),
-                contentPadding = PaddingValues(8.dp),
-                horizontalArrangement = Arrangement.spacedBy(16.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp),
-                modifier = Modifier.fillMaxSize(),
-            ) {
-                items(bookmarksState) { bookmark ->
-                    BookmarkCard(
-                        bookmark = bookmark,
-                        onClick = {
-                            val provider = APIHolder.getApiFromNameNull(bookmark.apiName)
-                            if (provider != null) {
-                                navController.navigate(Screen.Details(provider, bookmark.url))
-                            } else {
-                                showError = "The provider '${bookmark.apiName}' is not loaded. Please install or enable it first."
-                            }
-                        },
-                        onDelete = {
-                            DesktopDataStore.removeBookmark(bookmark.id)
-                            bookmarksState.remove(bookmark)
-                        },
+    Column(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(20.dp)) {
+        Text("Favourites", style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold)
+        Text("Your saved movies, TV shows and anime.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Box(modifier = Modifier.weight(1f)) {
+            if (bookmarksState.isEmpty()) {
+                Column(
+                    modifier = Modifier.fillMaxSize(),
+                    verticalArrangement = Arrangement.Center,
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    Text(
+                        "No favourites yet.",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
                     )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        "Use the heart on a title’s details page to save it here.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                    )
+                    Spacer(modifier = Modifier.height(24.dp))
+                    Button(onClick = { navController.navigate(Screen.Browse) }) {
+                        Text("Explore titles")
+                    }
+                }
+            } else {
+                val gridScale by com.lagradost.cloudstream3.desktop.ui.theme.AppearanceConfig.gridScale.collectAsState()
+                val minSize = when (gridScale) {
+                    "Compact" -> 120.dp
+                    "Large" -> 180.dp
+                    else -> 150.dp
+                }
+
+                LazyVerticalGrid(
+                    columns = GridCells.Adaptive(minSize = minSize),
+                    contentPadding = PaddingValues(8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                    modifier = Modifier.fillMaxSize(),
+                ) {
+                    items(bookmarksState) { bookmark ->
+                        BookmarkCard(
+                            bookmark = bookmark,
+                            onClick = {
+                                val provider = APIHolder.getApiFromNameNull(bookmark.apiName)
+                                if (provider != null) {
+                                    navController.navigate(Screen.Details(provider, bookmark.url))
+                                } else {
+                                    showError = "The provider '${bookmark.apiName}' is not loaded. Please install or enable it first."
+                                }
+                            },
+                            onDelete = {
+                                DesktopDataStore.removeBookmark(bookmark.id)
+                                bookmarksState.remove(bookmark)
+                            },
+                        )
+                    }
                 }
             }
         }
@@ -185,7 +189,7 @@ fun BookmarkCard(bookmark: DesktopBookmark, onClick: () -> Unit, onDelete: () ->
             ) {
                 Icon(
                     imageVector = Icons.Default.Delete,
-                    contentDescription = "Remove Bookmark",
+                    contentDescription = "Remove from favourites",
                     tint = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier.size(16.dp),
                 )
