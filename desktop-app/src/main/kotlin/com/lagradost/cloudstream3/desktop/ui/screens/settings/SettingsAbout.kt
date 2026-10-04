@@ -1,15 +1,107 @@
 package com.lagradost.cloudstream3.desktop.ui.screens.settings
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.lagradost.cloudstream3.desktop.updater.DesktopAppUpdater
+import com.lagradost.cloudstream3.desktop.updater.UpdateUiState
 
 @Composable
 fun SettingsAbout() {
-    Column {
+    val coroutineScope = rememberCoroutineScope()
+    var autoCheckEnabled by remember { mutableStateOf(DesktopAppUpdater.isAutoCheckEnabled) }
+    val uiState by DesktopAppUpdater.uiState.collectAsState()
+
+    Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+        Card(
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+            modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column {
+                        Text(
+                            "Software Updates",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            "Current Version: v${DesktopAppUpdater.CURRENT_VERSION}",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.Medium,
+                        )
+                    }
+
+                    Button(
+                        onClick = {
+                            DesktopAppUpdater.checkForUpdate(isAutomatic = false, scope = coroutineScope)
+                        },
+                        enabled = uiState !is UpdateUiState.Checking && uiState !is UpdateUiState.Downloading,
+                    ) {
+                        if (uiState is UpdateUiState.Checking) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(16.dp),
+                                color = MaterialTheme.colorScheme.onPrimary,
+                                strokeWidth = 2.dp,
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Checking...")
+                        } else {
+                            Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Check for Updates")
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            "Check for updates on startup",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.onSurface,
+                        )
+                        Text(
+                            "Automatically notify when a new release is available on GitHub",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Switch(
+                        checked = autoCheckEnabled,
+                        onCheckedChange = { checked ->
+                            autoCheckEnabled = checked
+                            DesktopAppUpdater.setAutoCheckEnabled(checked)
+                        },
+                    )
+                }
+            }
+        }
+
         Card(
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
             modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
@@ -29,7 +121,7 @@ fun SettingsAbout() {
                 )
                 Spacer(modifier = Modifier.height(16.dp))
 
-                Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
                     Button(onClick = { openUrl("https://discord.gg/5Hus6fM") }) {
                         Text("Join Discord")
                     }

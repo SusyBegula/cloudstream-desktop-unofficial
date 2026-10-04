@@ -34,6 +34,9 @@ import com.lagradost.cloudstream3.desktop.ui.screens.browse.BrowseCategory
 import com.lagradost.cloudstream3.desktop.ui.screens.browse.headerTitle
 import com.lagradost.cloudstream3.desktop.ui.screens.home.HomeViewModel
 import com.lagradost.cloudstream3.desktop.ui.screens.home.ProviderSelector
+import com.lagradost.cloudstream3.desktop.updater.AppUpdateDialog
+import com.lagradost.cloudstream3.desktop.updater.AppUpdateNotificationBanner
+import com.lagradost.cloudstream3.desktop.updater.DesktopAppUpdater
 import kotlinx.coroutines.delay
 
 val LocalAppHeaderHeight = staticCompositionLocalOf { 80.dp }
@@ -47,6 +50,9 @@ fun DesktopAppShell(
 ) {
     val current = navController.currentScreen
     LaunchedEffect(Unit) {
+        delay(2000L)
+        DesktopAppUpdater.checkForUpdate(isAutomatic = true, scope = this)
+
         while (true) {
             delay(30 * 60 * 1000L)
             DesktopRepositoryManager.autoUpdatePlugins()
@@ -64,7 +70,11 @@ fun DesktopAppShell(
                         else PaddingValues(top = headerHeight + 20.dp, start = 32.dp, end = 32.dp, bottom = 12.dp),
                     ),
                 ) { content() }
-                AppHeader(navController, homeViewModel, compact, fullBleed, showBack)
+                Column(Modifier.fillMaxWidth().align(Alignment.TopCenter)) {
+                    AppHeader(navController, homeViewModel, compact, fullBleed, showBack)
+                    AppUpdateNotificationBanner()
+                }
+                AppUpdateDialog()
             }
         }
     }
