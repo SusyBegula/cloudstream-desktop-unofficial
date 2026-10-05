@@ -131,7 +131,7 @@ fun EmbeddedVideoPlayer(
                                 isLoading = false
                             },
                             onPlaybackError = { error ->
-                                if (autoPlay && currentLinkIndex + 1 < launchData.links.size) {
+                                if (currentLinkIndex + 1 < launchData.links.size) {
                                     currentLinkIndex++
                                     isLoading = true
                                 } else {
@@ -208,10 +208,10 @@ fun EmbeddedVideoPlayer(
                             strokeWidth = 4.dp,
                             modifier = Modifier.size(48.dp),
                         )
-                        if (autoPlay && launchData.links.size > 1) {
+                        if (launchData.links.size > 1) {
                             Spacer(modifier = Modifier.height(16.dp))
                             Text(
-                                text = "Trying link ${currentLinkIndex + 1} of ${launchData.links.size}...",
+                                text = "Trying stream ${currentLinkIndex + 1} of ${launchData.links.size}...",
                                 color = MaterialTheme.colorScheme.onSurface,
                                 style = MaterialTheme.typography.bodyMedium,
                             )
