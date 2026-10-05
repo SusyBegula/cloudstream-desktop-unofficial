@@ -231,9 +231,10 @@ val packageAppImageFile by tasks.registering {
         binDir.copyRecursively(appDir.resolve("bin"), overwrite = true)
         libDir.copyRecursively(appDir.resolve("lib"), overwrite = true)
 
-        // Ensure all executables in bin/ retain execution permissions
-        appDir.resolve("bin").walkTopDown().filter { it.isFile }.forEach {
-            it.setExecutable(true, false)
+        // Ensure all executables in bin/ and runtime (jspawnhelper, etc.) retain execution permissions
+        distDir.walkTopDown().filter { it.isFile && it.canExecute() }.forEach { src ->
+            val relative = src.relativeTo(distDir)
+            appDir.resolve(relative.path).setExecutable(true, false)
         }
 
         // 2. Setup AppRun
@@ -356,8 +357,11 @@ val installLinuxApp by tasks.registering {
         println("Installing standalone binaries to ${installDir.absolutePath}...")
         builtDistDir.copyRecursively(installDir, overwrite = true)
 
-        val targetBin = File(installDir, "bin/CloudStream-Desktop")
-        targetBin.setExecutable(true, false)
+        // Restore execute permissions for all binaries and runtime helpers (jspawnhelper, jexec, etc.)
+        builtDistDir.walkTopDown().filter { it.isFile && it.canExecute() }.forEach { src ->
+            val relative = src.relativeTo(builtDistDir)
+            installDir.resolve(relative.path).setExecutable(true, false)
+        }
 
         val launcher = File(binDir, "cloudstream-desktop")
         launcher.writeText(
