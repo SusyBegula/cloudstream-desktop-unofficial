@@ -363,6 +363,7 @@ val installLinuxApp by tasks.registering {
             installDir.resolve(relative.path).setExecutable(true, false)
         }
 
+        val targetBin = File(installDir, "bin/CloudStream-Desktop")
         val launcher = File(binDir, "cloudstream-desktop")
         launcher.writeText(
             """
