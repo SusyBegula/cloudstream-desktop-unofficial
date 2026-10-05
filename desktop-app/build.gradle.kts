@@ -231,6 +231,11 @@ val packageAppImageFile by tasks.registering {
         binDir.copyRecursively(appDir.resolve("bin"), overwrite = true)
         libDir.copyRecursively(appDir.resolve("lib"), overwrite = true)
 
+        // Ensure all executables in bin/ retain execution permissions
+        appDir.resolve("bin").walkTopDown().filter { it.isFile }.forEach {
+            it.setExecutable(true, false)
+        }
+
         // 2. Setup AppRun
         val appRun = appDir.resolve("AppRun")
         appRun.writeText(
