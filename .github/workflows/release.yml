@@ -90,7 +90,7 @@ jobs:
         run: ./gradlew desktop-app:packageDeb
 
       - name: Build .AppImage package
-        run: ./gradlew desktop-app:packageAppImage
+        run: ./gradlew desktop-app:packageAppImageFile
 
       - name: Upload Linux artifacts
         uses: actions/upload-artifact@v4

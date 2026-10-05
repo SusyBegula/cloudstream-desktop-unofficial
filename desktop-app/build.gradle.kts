@@ -1,3 +1,4 @@
+import java.net.URI
 import java.util.zip.ZipEntry
 import java.util.zip.ZipFile
 import java.util.zip.ZipOutputStream
@@ -204,6 +205,122 @@ compose.desktop {
         tasks.matching { task ->
             task.name.startsWith("package") || task.name.startsWith("create")
         }.forEach { it.dependsOn(stripPlaywrightDriver) }
+    }
+}
+
+val packageAppImageFile by tasks.registering {
+    description = "Packages the Linux distribution into a standalone .AppImage file using appimagetool."
+    group = "distribution"
+    dependsOn("packageAppImage")
+
+    doLast {
+        val appVersion = "0.1.2"
+        val buildDir = layout.buildDirectory.get().asFile
+        val distDir = buildDir.resolve("compose/binaries/main/app/CloudStream-Desktop")
+        if (!distDir.exists()) {
+            throw GradleException("Distribution directory not found at ${distDir.absolutePath}. Ensure packageAppImage ran first.")
+        }
+
+        val appDir = buildDir.resolve("compose/binaries/main/AppDir")
+        if (appDir.exists()) appDir.deleteRecursively()
+        appDir.mkdirs()
+
+        // 1. Copy bin and lib into AppDir
+        val binDir = distDir.resolve("bin")
+        val libDir = distDir.resolve("lib")
+        binDir.copyRecursively(appDir.resolve("bin"), overwrite = true)
+        libDir.copyRecursively(appDir.resolve("lib"), overwrite = true)
+
+        // 2. Setup AppRun
+        val appRun = appDir.resolve("AppRun")
+        appRun.writeText(
+            """
+            |#!/bin/sh
+            |HERE="${'$'}(dirname "${'$'}(readlink -f "${'$'}{0}")")"
+            |export PATH="${'$'}{HERE}/bin:${'$'}{PATH}"
+            |export LD_LIBRARY_PATH="${'$'}{HERE}/lib:${'$'}{LD_LIBRARY_PATH}:/usr/lib:/usr/lib64:/usr/lib/x86_64-linux-gnu"
+            |export _JAVA_AWT_WM_NONREPARENTING=1
+            |exec "${'$'}{HERE}/bin/CloudStream-Desktop" "${'$'}@"
+            """.trimMargin().trim() + "\n"
+        )
+        appRun.setExecutable(true, false)
+
+        // 3. Desktop Entry
+        val desktopFile = appDir.resolve("cloudstream-desktop.desktop")
+        desktopFile.writeText(
+            """
+            |[Desktop Entry]
+            |Name=CloudStream Desktop
+            |GenericName=Media Streaming Player
+            |Comment=Unofficial CloudStream Desktop Client
+            |Exec=CloudStream-Desktop %U
+            |Icon=cloudstream-desktop
+            |Terminal=false
+            |Type=Application
+            |Categories=AudioVideo;Video;Player;Network;
+            |StartupWMClass=com.lagradost.cloudstream3.desktop.MainKt
+            |Keywords=stream;streaming;cloudstream;movie;tv;anime;video;
+            """.trimMargin().trim() + "\n"
+        )
+
+        // 4. Icons
+        val sourceIcon = project.file("src/main/resources/logo_ui.png")
+        if (sourceIcon.exists()) {
+            sourceIcon.copyTo(appDir.resolve("cloudstream-desktop.png"), overwrite = true)
+            sourceIcon.copyTo(appDir.resolve(".DirIcon"), overwrite = true)
+        }
+
+        // 5. Ensure appimagetool is available
+        val toolsDir = buildDir.resolve("tools")
+        toolsDir.mkdirs()
+        val appImageToolDir = toolsDir.resolve("appimagetool_squashfs")
+        val appImageToolExecutable = appImageToolDir.resolve("AppRun")
+
+        if (!appImageToolExecutable.exists()) {
+            println("Downloading appimagetool-x86_64.AppImage...")
+            val downloadedTool = toolsDir.resolve("appimagetool-x86_64.AppImage")
+            if (!downloadedTool.exists()) {
+                URI.create("https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage")
+                    .toURL().openStream().use { input: java.io.InputStream ->
+                        downloadedTool.outputStream().use { output: java.io.OutputStream ->
+                            input.copyTo(output)
+                        }
+                    }
+                downloadedTool.setExecutable(true, false)
+            }
+
+            println("Extracting appimagetool (to run reliably without FUSE in containers/CI)...")
+            val extractProc = ProcessBuilder(downloadedTool.absolutePath, "--appimage-extract")
+                .directory(toolsDir)
+                .inheritIO()
+                .start()
+            val extractCode = extractProc.waitFor()
+            if (extractCode != 0) {
+                throw GradleException("Failed to extract appimagetool (exit code $extractCode)")
+            }
+            val extractedRoot = toolsDir.resolve("squashfs-root")
+            if (appImageToolDir.exists()) appImageToolDir.deleteRecursively()
+            extractedRoot.renameTo(appImageToolDir)
+        }
+
+        // 6. Build the final AppImage
+        val outputDir = buildDir.resolve("compose/binaries/main/app")
+        outputDir.mkdirs()
+        val outputAppImage = outputDir.resolve("CloudStream-Desktop-$appVersion.AppImage")
+
+        println("Building AppImage with appimagetool into ${outputAppImage.absolutePath}...")
+        val builderProc = ProcessBuilder(appImageToolExecutable.absolutePath, appDir.absolutePath, outputAppImage.absolutePath)
+        builderProc.environment()["ARCH"] = "x86_64"
+        builderProc.inheritIO()
+        val code = builderProc.start().waitFor()
+        if (code != 0) {
+            throw GradleException("appimagetool failed with exit code $code")
+        }
+        outputAppImage.setExecutable(true, false)
+        println("================================================================")
+        println(" AppImage successfully generated!")
+        println(" Location: ${outputAppImage.absolutePath} (${outputAppImage.length() / 1024 / 1024} MB)")
+        println("================================================================")
     }
 }
 

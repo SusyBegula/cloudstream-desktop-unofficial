@@ -262,33 +262,9 @@ object DesktopAppUpdater {
         val os = System.getProperty("os.name")?.lowercase() ?: ""
         try {
             if (os.contains("linux")) {
-                val runningAppImage = System.getenv("APPIMAGE")
-                if (isAppImage && !runningAppImage.isNullOrBlank()) {
-                    val currentAppImageFile = File(runningAppImage)
-                    if (currentAppImageFile.exists() && currentAppImageFile.canWrite()) {
-                        // Create update swap script
-                        val scriptFile = File.createTempFile("cs_updater_", ".sh")
-                        scriptFile.writeText(
-                            """
-                            #!/bin/sh
-                            sleep 1
-                            mv -f "${installerFile.absolutePath}" "${currentAppImageFile.absolutePath}"
-                            chmod +x "${currentAppImageFile.absolutePath}"
-                            exec "${currentAppImageFile.absolutePath}" &
-                            rm -f "$0"
-                            """.trimIndent()
-                        )
-                        scriptFile.setExecutable(true, false)
-                        ProcessBuilder("sh", scriptFile.absolutePath).start()
-                        exitProcess(0)
-                    }
-                }
-
-                // If not running as writable AppImage, launch the newly downloaded AppImage or installer directly
                 if (isAppImage) {
-                    installerFile.setExecutable(true, false)
-                    ProcessBuilder(installerFile.absolutePath).start()
-                    exitProcess(0)
+                    installAndRestartAppImage(installerFile)
+                    return@withContext
                 } else if (installerFile.name.endsWith(".deb", ignoreCase = true)) {
                     // Open with package manager
                     ProcessBuilder("xdg-open", installerFile.absolutePath).start()
@@ -305,6 +281,108 @@ object DesktopAppUpdater {
         } catch (e: Exception) {
             AppLogger.e("DesktopAppUpdater: Failed to launch installer", e)
             _uiState.value = UpdateUiState.Error("Failed to launch installer: ${e.message}")
+        }
+    }
+
+    private fun installAndRestartAppImage(installerFile: File) {
+        val userHome = File(System.getProperty("user.home"))
+        val runningAppImage = System.getenv("APPIMAGE")
+
+        // 1. Determine target installation path
+        val defaultInstallDir = File(userHome, ".local/share/cloudstream-desktop").apply { mkdirs() }
+        val targetAppImage: File = if (!runningAppImage.isNullOrBlank()) {
+            val f = File(runningAppImage)
+            val parent = f.parentFile
+            if (parent != null && parent.canWrite()) f else File(defaultInstallDir, "CloudStream-Desktop.AppImage")
+        } else {
+            File(defaultInstallDir, "CloudStream-Desktop.AppImage")
+        }
+
+        // 2. Setup Linux desktop integration (Hyprland / rofi / wofi / desktop menu)
+        setupLinuxDesktopIntegration(userHome, targetAppImage)
+
+        // 3. Prepare background update and restart script
+        val pid = ProcessHandle.current().pid()
+        val scriptFile = File.createTempFile("cs_updater_", ".sh")
+        scriptFile.writeText(
+            """
+            |#!/bin/sh
+            |# Wait for running CloudStream process ($pid) to exit
+            |while kill -0 $pid 2>/dev/null; do
+            |    sleep 0.2
+            |done
+            |sleep 0.3
+            |
+            |# Atomically replace target AppImage
+            |mkdir -p "${targetAppImage.parentFile?.absolutePath ?: userHome.absolutePath}"
+            |cp -f "${installerFile.absolutePath}" "${targetAppImage.absolutePath}"
+            |chmod +x "${targetAppImage.absolutePath}"
+            |rm -f "${installerFile.absolutePath}"
+            |
+            |# Launch updated AppImage with Hyprland/Wayland tiling compatibility
+            |export _JAVA_AWT_WM_NONREPARENTING=1
+            |nohup "${targetAppImage.absolutePath}" >/dev/null 2>&1 &
+            |rm -f "${'$'}0"
+            """.trimMargin().trim() + "\n"
+        )
+        scriptFile.setExecutable(true, false)
+
+        AppLogger.i("DesktopAppUpdater: Launching update script ${scriptFile.absolutePath} to install $targetAppImage and restart")
+        ProcessBuilder("sh", scriptFile.absolutePath).start()
+        exitProcess(0)
+    }
+
+    private fun setupLinuxDesktopIntegration(userHome: File, targetAppImage: File) {
+        try {
+            val binDir = File(userHome, ".local/bin").apply { mkdirs() }
+            val appDir = File(userHome, ".local/share/applications").apply { mkdirs() }
+            val iconDir = File(userHome, ".local/share/icons/hicolor/256x256/apps").apply { mkdirs() }
+            val pixmapsDir = File(userHome, ".local/share/pixmaps").apply { mkdirs() }
+
+            // 1. Launcher command in ~/.local/bin/cloudstream-desktop
+            val launcher = File(binDir, "cloudstream-desktop")
+            launcher.writeText(
+                """
+                |#!/usr/bin/env sh
+                |export _JAVA_AWT_WM_NONREPARENTING=1
+                |exec "${targetAppImage.absolutePath}" "$@"
+                """.trimMargin().trim() + "\n"
+            )
+            launcher.setExecutable(true, false)
+
+            // 2. Extract application icon from resources
+            val iconFile = File(iconDir, "cloudstream-desktop.png")
+            val pixmapFile = File(pixmapsDir, "cloudstream-desktop.png")
+            DesktopAppUpdater::class.java.getResourceAsStream("/logo_ui.png")?.use { input ->
+                val bytes = input.readBytes()
+                iconFile.writeBytes(bytes)
+                pixmapFile.writeBytes(bytes)
+            }
+
+            // 3. Desktop entry for Hyprland / rofi / wofi
+            val desktopFile = File(appDir, "cloudstream-desktop.desktop")
+            desktopFile.writeText(
+                """
+                |[Desktop Entry]
+                |Name=CloudStream Desktop
+                |GenericName=Media Streaming Player
+                |Comment=Unofficial CloudStream Desktop Client
+                |Exec=${launcher.absolutePath} %U
+                |Icon=cloudstream-desktop
+                |Terminal=false
+                |Type=Application
+                |Categories=AudioVideo;Video;Player;Network;
+                |StartupWMClass=com.lagradost.cloudstream3.desktop.MainKt
+                |Keywords=stream;streaming;cloudstream;movie;tv;anime;video;
+                """.trimMargin().trim() + "\n"
+            )
+
+            // 4. Update desktop database so Hyprland app launchers immediately refresh
+            try {
+                ProcessBuilder("update-desktop-database", appDir.absolutePath).start()
+            } catch (_: Throwable) {}
+        } catch (e: Exception) {
+            AppLogger.w("DesktopAppUpdater: Failed to complete desktop integration", e)
         }
     }
 }
