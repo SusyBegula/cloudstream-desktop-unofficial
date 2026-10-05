@@ -31,6 +31,9 @@ import com.lagradost.cloudstream3.desktop.download.FfmpegDownloadManager
 import com.lagradost.cloudstream3.desktop.ui.NextEpisodeData
 import com.lagradost.cloudstream3.desktop.ui.components.DesktopUi
 import com.lagradost.cloudstream3.desktop.utils.DefaultStreamHelper
+import com.lagradost.cloudstream3.desktop.utils.LinkHealth
+import com.lagradost.cloudstream3.desktop.utils.LinkHealthChecker
+import com.lagradost.cloudstream3.desktop.utils.LinkHealthStatus
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.common.storage.DesktopDataStore
 import com.lagradost.common.storage.WatchHistory
@@ -68,6 +71,7 @@ fun LinksModal(
 ) {
     val links = remember { mutableStateListOf<ExtractorLink>() }
     val subtitles = remember { mutableStateListOf<SubtitleFile>() }
+    val healthMap = remember { mutableStateMapOf<String, LinkHealth>() }
     var statusText by remember { mutableStateOf("Finding streams for you...") }
     var isScraping by remember { mutableStateOf(true) }
 
@@ -107,13 +111,25 @@ fun LinksModal(
             .sortedDescending()
             .map { it.toString() }
     }
-    val filteredLinks = remember(links.size, selectedQuality) {
+    val filteredLinks = remember(links.size, selectedQuality, healthMap.size, defaultStreamPref) {
         val list = if (selectedQuality == null) {
             links.toList()
         } else {
             links.filter { it.quality.toString() == selectedQuality }
         }
-        list.sortedWith(compareByDescending<ExtractorLink> { it.quality }.thenBy { it.name.lowercase() })
+        list.sortedWith(
+            compareByDescending<ExtractorLink> { !defaultStreamPref.isNullOrBlank() && DefaultStreamHelper.matches(it, defaultStreamPref) }
+                .thenBy { link ->
+                    val health = healthMap[link.url]
+                    when (health?.status) {
+                        LinkHealthStatus.ONLINE -> health.latencyMs
+                        LinkHealthStatus.CHECKING, null -> 100_000L
+                        LinkHealthStatus.OFFLINE -> Long.MAX_VALUE
+                    }
+                }
+                .thenByDescending { it.quality }
+                .thenBy { it.name.lowercase() }
+        )
     }
 
     val displayTitle = remember(history) {
@@ -267,6 +283,7 @@ fun LinksModal(
     LaunchedEffect(dataUrl, autoPlay) {
         links.clear()
         subtitles.clear()
+        healthMap.clear()
         isScraping = true
         hasAutoPlayed = false
         val preferredDisplayName = DefaultStreamHelper.formatDisplayName(defaultStreamPref)
@@ -287,10 +304,26 @@ fun LinksModal(
                     callback = { link: ExtractorLink ->
                         coroutineScope.launch {
                             links.add(link)
-                            if (autoPlay && !hasAutoPlayed && !defaultStreamPref.isNullOrBlank() && DefaultStreamHelper.matches(link, defaultStreamPref)) {
-                                hasAutoPlayed = true
-                                playLink(link)
-                            } else {
+                            healthMap[link.url] = LinkHealth(LinkHealthStatus.CHECKING)
+
+                            // Launch non-blocking background health check
+                            launch(Dispatchers.IO) {
+                                val health = LinkHealthChecker.checkHealth(link)
+                                coroutineScope.launch {
+                                    healthMap[link.url] = health
+
+                                    if (autoPlay && !hasAutoPlayed && !defaultStreamPref.isNullOrBlank() && DefaultStreamHelper.matches(link, defaultStreamPref)) {
+                                        if (health.status == LinkHealthStatus.ONLINE) {
+                                            hasAutoPlayed = true
+                                            playLink(link)
+                                        } else {
+                                            statusText = "Preferred stream '$preferredDisplayName' is offline. Finding alternatives..."
+                                        }
+                                    }
+                                }
+                            }
+
+                            if (!autoPlay || hasAutoPlayed || defaultStreamPref.isNullOrBlank()) {
                                 statusText = "Found ${links.size} stream${if (links.size == 1) "" else "s"}..."
                             }
                         }

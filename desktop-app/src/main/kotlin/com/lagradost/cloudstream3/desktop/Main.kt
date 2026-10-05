@@ -84,11 +84,22 @@ fun main() {
             height = windowHeight,
             position = androidx.compose.ui.window.WindowPosition.Aligned(androidx.compose.ui.Alignment.Center),
         )
+        val appIcon = try {
+            val bytes = Thread.currentThread().contextClassLoader.getResourceAsStream("logo_ui.png")?.readBytes()
+                ?: object {}::class.java.classLoader.getResourceAsStream("logo_ui.png")?.readBytes()
+                ?: File("desktop-app/src/main/resources/logo_ui.png").takeIf { it.exists() }?.readBytes()
+                ?: File("src/main/resources/logo_ui.png").takeIf { it.exists() }?.readBytes()
+            bytes?.let { androidx.compose.ui.res.loadImageBitmap(java.io.ByteArrayInputStream(it)) }
+                ?.let { androidx.compose.ui.graphics.painter.BitmapPainter(it) }
+        } catch (_: Throwable) {
+            null
+        }
+
         Window(
             onCloseRequest = ::exitApplication,
             title = "CloudStream - Unofficial Desktop Client (Pre-Alpha)",
             state = state,
-            icon = androidx.compose.ui.res.painterResource("logo_ui.png"),
+            icon = appIcon,
         ) {
             androidx.compose.runtime.CompositionLocalProvider(
                 com.lagradost.cloudstream3.desktop.ui.LocalWindowState provides state,

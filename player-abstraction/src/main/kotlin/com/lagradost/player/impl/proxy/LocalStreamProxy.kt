@@ -184,6 +184,13 @@ object LocalStreamProxy {
                 call.response.header("Content-Type", "application/vnd.apple.mpegurl")
                 call.respondBytes(bytes, status = HttpStatusCode.OK)
             } else {
+                if (contentTypeStr.contains("text/html", ignoreCase = true)) {
+                    AppLogger.e("LocalStreamProxy: Server returned HTML webpage instead of media stream! URL: $url")
+                    response.body.close()
+                    call.respond(HttpStatusCode.NotFound)
+                    return
+                }
+
                 response.header("Content-Range")?.let { call.response.header("Content-Range", it) }
                 response.header("Accept-Ranges")?.let { call.response.header("Accept-Ranges", it) }
 
