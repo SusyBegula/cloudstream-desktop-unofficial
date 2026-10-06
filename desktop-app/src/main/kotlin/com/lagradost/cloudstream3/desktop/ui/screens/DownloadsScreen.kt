@@ -1,11 +1,7 @@
 package com.lagradost.cloudstream3.desktop.ui.screens
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -41,7 +37,6 @@ import com.lagradost.common.platform.PlatformPaths
 import com.lagradost.common.storage.DesktopDataStore
 import com.lagradost.common.storage.DownloadedItemRecord
 import com.lagradost.common.storage.WatchHistory
-import kotlinx.coroutines.launch
 import java.awt.Desktop
 import java.io.File
 import java.text.SimpleDateFormat
@@ -70,7 +65,7 @@ fun ComposeDownloadsScreen(navController: NavController) {
         } else {
             downloadedItems.filter {
                 it.showName.contains(searchQuery, ignoreCase = true) ||
-                it.episodeTitle.contains(searchQuery, ignoreCase = true)
+                    it.episodeTitle.contains(searchQuery, ignoreCase = true)
             }
         }
     }
@@ -105,7 +100,7 @@ fun ComposeDownloadsScreen(navController: NavController) {
                     if (downloadedItems.isEmpty() && inProgress.isEmpty()) {
                         "No downloads yet · Saved media will appear here for offline viewing"
                     } else {
-                        "${downloadedItems.size} downloaded (${formattedTotalSize}) · ${inProgress.size} active"
+                        "${downloadedItems.size} downloaded ($formattedTotalSize) · ${inProgress.size} active"
                     },
                     style = MaterialTheme.typography.bodyMedium,
                     color = DesktopUi.TextMuted,
@@ -521,7 +516,7 @@ private fun playDownloadedEpisode(
         val s = it.season
         val e = it.episode
         (s == curSeason && e != null && curEpisode != null && e == curEpisode + 1) ||
-        (s != null && curSeason != null && s == curSeason + 1 && e == 1)
+            (s != null && curSeason != null && s == curSeason + 1 && e == 1)
     } ?: run {
         val currentIdx = showItems.indexOfFirst { it.id == item.id }
         if (currentIdx >= 0 && currentIdx + 1 < showItems.size) showItems[currentIdx + 1] else null
@@ -565,4 +560,3 @@ private fun playDownloadedEpisode(
         ),
     )
 }
-

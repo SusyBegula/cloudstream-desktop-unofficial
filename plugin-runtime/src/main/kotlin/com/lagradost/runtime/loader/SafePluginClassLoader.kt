@@ -132,7 +132,7 @@ class SafePluginClassLoader(parent: ClassLoader) : ClassLoader(parent) {
                 "java.io.Closeable",
                 "java.io.PrintStream",
                 "java.io.PrintWriter",
-                "java.io.ObjectStreamException"
+                "java.io.ObjectStreamException",
             )
             if (!safeIo.contains(name)) {
                 return true
@@ -170,7 +170,7 @@ class SafePluginClassLoader(parent: ClassLoader) : ClassLoader(parent) {
                 "java.lang.invoke.StringConcatFactory",
                 "java.lang.invoke.TypeDescriptor",
                 "java.lang.invoke.TypeDescriptor\$OfField",
-                "java.lang.invoke.TypeDescriptor\$OfMethod"
+                "java.lang.invoke.TypeDescriptor\$OfMethod",
             )
             if (!safeInvoke.contains(name)) {
                 return true

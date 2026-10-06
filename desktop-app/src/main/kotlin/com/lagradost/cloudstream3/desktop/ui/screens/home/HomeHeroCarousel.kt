@@ -333,10 +333,11 @@ fun HomeHeroCarousel(items: List<SearchResponse>, provider: MainAPI?, onItemClic
                                     modifier = Modifier
                                         .size(6.dp)
                                         .background(
-                                            if (tvType == com.lagradost.cloudstream3.TvType.Movie || tvType == com.lagradost.cloudstream3.TvType.AnimeMovie)
+                                            if (tvType == com.lagradost.cloudstream3.TvType.Movie || tvType == com.lagradost.cloudstream3.TvType.AnimeMovie) {
                                                 Color(0xFF38BDF8)
-                                            else
-                                                Color(0xFFA855F7),
+                                            } else {
+                                                Color(0xFFA855F7)
+                                            },
                                             CircleShape,
                                         ),
                                 )

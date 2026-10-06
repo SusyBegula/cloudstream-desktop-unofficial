@@ -1,6 +1,5 @@
 package com.lagradost.cloudstream3.desktop.ui.components
 
-import com.lagradost.cloudstream3.MovieSearchResponse
 import com.lagradost.cloudstream3.TvType
 import kotlin.test.Test
 import kotlin.test.assertEquals

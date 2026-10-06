@@ -7,7 +7,7 @@ object DefaultStreamHelper {
     private const val DELIMITER = "::"
 
     fun buildKey(providerName: String, showUrl: String): String =
-        "default_stream_${providerName}_${showUrl}"
+        "default_stream_${providerName}_$showUrl"
 
     fun buildIdentifier(link: ExtractorLink): String =
         "${link.name}$DELIMITER${link.quality}"

@@ -83,7 +83,9 @@ interface User32Library : Library {
                     AppLogger.w("Failed to load user32 library: ${e.message}")
                     null
                 }
-            } else null
+            } else {
+                null
+            }
         }
 
         fun makeTransparent(parentHwndPtr: Pointer?): Boolean {

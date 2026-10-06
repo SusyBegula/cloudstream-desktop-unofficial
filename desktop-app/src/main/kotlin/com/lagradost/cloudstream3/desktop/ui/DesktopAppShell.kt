@@ -66,8 +66,11 @@ fun DesktopAppShell(
             CompositionLocalProvider(LocalAppHeaderHeight provides headerHeight) {
                 Box(
                     Modifier.fillMaxSize().padding(
-                        if (fullBleed) PaddingValues(0.dp)
-                        else PaddingValues(top = headerHeight + 20.dp, start = 32.dp, end = 32.dp, bottom = 12.dp),
+                        if (fullBleed) {
+                            PaddingValues(0.dp)
+                        } else {
+                            PaddingValues(top = headerHeight + 20.dp, start = 32.dp, end = 32.dp, bottom = 12.dp)
+                        },
                     ),
                 ) { content() }
                 Column(Modifier.fillMaxWidth().align(Alignment.TopCenter)) {

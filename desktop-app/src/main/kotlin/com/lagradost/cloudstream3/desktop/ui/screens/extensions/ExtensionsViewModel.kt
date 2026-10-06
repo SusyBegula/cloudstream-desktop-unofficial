@@ -250,4 +250,3 @@ class ExtensionsViewModel(private val coroutineScope: CoroutineScope) {
         }
     }
 }
-

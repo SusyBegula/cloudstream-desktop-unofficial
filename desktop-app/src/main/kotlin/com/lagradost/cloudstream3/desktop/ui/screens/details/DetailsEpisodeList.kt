@@ -84,10 +84,10 @@ fun EpisodeCard(ep: Episode, isLatest: Boolean, history: WatchHistory?, provider
                     rawName.isBlank() -> "Episode ${epNum ?: "?"}"
                     epNum != null && (
                         rawName.equals("E$epNum", ignoreCase = true) ||
-                        rawName.equals("Episode $epNum", ignoreCase = true) ||
-                        rawName.equals("S${ep.season}E$epNum", ignoreCase = true) ||
-                        rawName.matches(Regex("""(?i)^S\d+E$epNum$"""))
-                    ) -> "Episode $epNum"
+                            rawName.equals("Episode $epNum", ignoreCase = true) ||
+                            rawName.equals("S${ep.season}E$epNum", ignoreCase = true) ||
+                            rawName.matches(Regex("""(?i)^S\d+E$epNum$"""))
+                        ) -> "Episode $epNum"
                     epNum != null -> "E$epNum - $rawName"
                     else -> rawName
                 }
@@ -314,10 +314,10 @@ fun navigateToPlay(
             ne.name.isNullOrBlank() -> "Episode ${ne.episode ?: "?"}"
             ne.episode != null && (
                 ne.name.equals("E${ne.episode}", ignoreCase = true) ||
-                ne.name.equals("Episode ${ne.episode}", ignoreCase = true) ||
-                ne.name.equals("S${ne.season}E${ne.episode}", ignoreCase = true) ||
-                ne.name?.matches(Regex("""(?i)^S\d+E${ne.episode}$""")) == true
-            ) -> "Episode ${ne.episode}"
+                    ne.name.equals("Episode ${ne.episode}", ignoreCase = true) ||
+                    ne.name.equals("S${ne.season}E${ne.episode}", ignoreCase = true) ||
+                    ne.name?.matches(Regex("""(?i)^S\d+E${ne.episode}$""")) == true
+                ) -> "Episode ${ne.episode}"
             ne.episode != null -> "Episode ${ne.episode}: ${ne.name}"
             else -> ne.name
         }

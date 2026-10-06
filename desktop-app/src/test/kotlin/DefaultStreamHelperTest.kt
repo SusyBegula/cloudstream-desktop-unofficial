@@ -68,7 +68,7 @@ class DefaultStreamHelperTest {
         )
 
         val sorted = links.sortedWith(
-            compareByDescending<ExtractorLink> { it.quality }.thenBy { it.name.lowercase() }
+            compareByDescending<ExtractorLink> { it.quality }.thenBy { it.name.lowercase() },
         )
 
         assertEquals(2160, sorted[0].quality)

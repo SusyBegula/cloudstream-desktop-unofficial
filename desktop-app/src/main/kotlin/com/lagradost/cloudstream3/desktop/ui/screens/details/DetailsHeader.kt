@@ -30,7 +30,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import coil3.compose.SubcomposeAsyncImage
-import com.lagradost.cloudstream3.desktop.ui.components.DesktopUi
 import com.lagradost.cloudstream3.LoadResponse
 import com.lagradost.cloudstream3.MainAPI
 import com.lagradost.cloudstream3.fixUrlNull
@@ -289,8 +288,8 @@ fun CastAvatar(
                     listOf(
                         Color(0xFF282A36),
                         Color(0xFF181A22),
-                    )
-                )
+                    ),
+                ),
             ),
         contentAlignment = Alignment.Center,
     ) {

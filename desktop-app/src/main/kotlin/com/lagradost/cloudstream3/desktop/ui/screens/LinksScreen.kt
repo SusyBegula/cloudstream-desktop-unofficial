@@ -24,7 +24,6 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.lagradost.cloudstream3.MainAPI
 import com.lagradost.cloudstream3.SubtitleFile
 import com.lagradost.cloudstream3.desktop.download.FfmpegDownloadManager
@@ -128,7 +127,7 @@ fun LinksModal(
                     }
                 }
                 .thenByDescending { it.quality }
-                .thenBy { it.name.lowercase() }
+                .thenBy { it.name.lowercase() },
         )
     }
 
@@ -639,7 +638,13 @@ private fun StreamLinkCard(
             .scale(scale)
             .hoverable(interaction),
         shape = RoundedCornerShape(12.dp),
-        color = if (isDefault) DesktopUi.AccentSoft.copy(alpha = 0.22f) else if (hovered) DesktopUi.SurfaceElevated else DesktopUi.SurfaceCard,
+        color = if (isDefault) {
+            DesktopUi.AccentSoft.copy(alpha = 0.22f)
+        } else if (hovered) {
+            DesktopUi.SurfaceElevated
+        } else {
+            DesktopUi.SurfaceCard
+        },
         border = if (isDefault) BorderStroke(1.5.dp, DesktopUi.Accent.copy(alpha = 0.75f)) else null,
         tonalElevation = if (hovered) 6.dp else 2.dp,
     ) {

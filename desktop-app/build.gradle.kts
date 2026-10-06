@@ -145,11 +145,12 @@ val stripPlaywrightDriver by tasks.registering {
 compose.desktop {
     application {
         mainClass = "com.lagradost.cloudstream3.desktop.MainKt"
-        jvmArgs += listOf(
-            "-D_JAVA_AWT_WM_NONREPARENTING=1",
-            "-Dawt.useSystemAAFontSettings=on",
-            "-Dswing.aatext=true",
-        )
+        jvmArgs +=
+            listOf(
+                "-D_JAVA_AWT_WM_NONREPARENTING=1",
+                "-Dawt.useSystemAAFontSettings=on",
+                "-Dswing.aatext=true",
+            )
         val javaMajor = JavaVersion.current().majorVersion.toIntOrNull() ?: 21
         if (javaMajor < 24) {
             jvmArgs += listOf("-Djava.security.manager=allow")
@@ -231,6 +232,24 @@ val packageAppImageFile by tasks.registering {
         binDir.copyRecursively(appDir.resolve("bin"), overwrite = true)
         libDir.copyRecursively(appDir.resolve("lib"), overwrite = true)
 
+        // Ensure executable permissions for binaries and native runtime files
+        appDir.resolve("bin").walkTopDown().forEach { file ->
+            if (file.isFile) {
+                file.setExecutable(true, false)
+                file.setReadable(true, false)
+            }
+        }
+        appDir.resolve("lib").walkTopDown().forEach { file ->
+            if (file.isFile && (file.extension == "so" || file.name == "jspawnhelper" || file.name == "jexec" || !file.name.contains("."))) {
+                file.setExecutable(true, false)
+                file.setReadable(true, false)
+            }
+        }
+        try {
+            ProcessBuilder("chmod", "-R", "a+rx", appDir.resolve("bin").absolutePath).inheritIO().start().waitFor()
+        } catch (_: Exception) {
+        }
+
         // 2. Setup AppRun
         val appRun = appDir.resolve("AppRun")
         appRun.writeText(
@@ -241,7 +260,7 @@ val packageAppImageFile by tasks.registering {
             |export LD_LIBRARY_PATH="${'$'}{HERE}/lib:${'$'}{LD_LIBRARY_PATH}:/usr/lib:/usr/lib64:/usr/lib/x86_64-linux-gnu"
             |export _JAVA_AWT_WM_NONREPARENTING=1
             |exec "${'$'}{HERE}/bin/CloudStream-Desktop" "${'$'}@"
-            """.trimMargin().trim() + "\n"
+            """.trimMargin().trim() + "\n",
         )
         appRun.setExecutable(true, false)
 
@@ -260,7 +279,7 @@ val packageAppImageFile by tasks.registering {
             |Categories=AudioVideo;Video;Player;Network;
             |StartupWMClass=com.lagradost.cloudstream3.desktop.MainKt
             |Keywords=stream;streaming;cloudstream;movie;tv;anime;video;
-            """.trimMargin().trim() + "\n"
+            """.trimMargin().trim() + "\n",
         )
 
         // 4. Icons
@@ -290,10 +309,11 @@ val packageAppImageFile by tasks.registering {
             }
 
             println("Extracting appimagetool (to run reliably without FUSE in containers/CI)...")
-            val extractProc = ProcessBuilder(downloadedTool.absolutePath, "--appimage-extract")
-                .directory(toolsDir)
-                .inheritIO()
-                .start()
+            val extractProc =
+                ProcessBuilder(downloadedTool.absolutePath, "--appimage-extract")
+                    .directory(toolsDir)
+                    .inheritIO()
+                    .start()
             val extractCode = extractProc.waitFor()
             if (extractCode != 0) {
                 throw GradleException("Failed to extract appimagetool (exit code $extractCode)")
@@ -351,6 +371,23 @@ val installLinuxApp by tasks.registering {
         println("Installing standalone binaries to ${installDir.absolutePath}...")
         builtDistDir.copyRecursively(installDir, overwrite = true)
 
+        File(installDir, "bin").walkTopDown().forEach { file ->
+            if (file.isFile) {
+                file.setExecutable(true, false)
+                file.setReadable(true, false)
+            }
+        }
+        File(installDir, "lib").walkTopDown().forEach { file ->
+            if (file.isFile && (file.extension == "so" || file.name == "jspawnhelper" || file.name == "jexec" || !file.name.contains("."))) {
+                file.setExecutable(true, false)
+                file.setReadable(true, false)
+            }
+        }
+        try {
+            ProcessBuilder("chmod", "-R", "a+rx", File(installDir, "bin").absolutePath).inheritIO().start().waitFor()
+        } catch (_: Exception) {
+        }
+
         val targetBin = File(installDir, "bin/CloudStream-Desktop")
         targetBin.setExecutable(true, false)
 
@@ -360,7 +397,7 @@ val installLinuxApp by tasks.registering {
             |#!/usr/bin/env sh
             |export _JAVA_AWT_WM_NONREPARENTING=1
             |exec "${targetBin.absolutePath}" "$@"
-            """.trimMargin().trim() + "\n"
+            """.trimMargin().trim() + "\n",
         )
         launcher.setExecutable(true, false)
 
@@ -384,12 +421,13 @@ val installLinuxApp by tasks.registering {
             |Categories=AudioVideo;Video;Player;Network;
             |StartupWMClass=com.lagradost.cloudstream3.desktop.MainKt
             |Keywords=stream;streaming;cloudstream;movie;tv;anime;video;
-            """.trimMargin().trim() + "\n"
+            """.trimMargin().trim() + "\n",
         )
 
         try {
             ProcessBuilder("update-desktop-database", appDir.absolutePath).start().waitFor()
-        } catch (_: Throwable) {}
+        } catch (_: Throwable) {
+        }
 
         println("================================================================")
         println(" CloudStream Desktop successfully installed!")
@@ -398,4 +436,3 @@ val installLinuxApp by tasks.registering {
         println("================================================================")
     }
 }
-

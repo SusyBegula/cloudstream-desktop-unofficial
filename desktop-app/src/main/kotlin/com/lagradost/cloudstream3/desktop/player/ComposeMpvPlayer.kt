@@ -6,16 +6,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.awt.SwingPanel
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.player.impl.PlayerLinkHandler
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.withContext
 import java.awt.Canvas
 import java.awt.Color
 import java.awt.KeyEventDispatcher
 import java.awt.event.*
 import java.io.File
-
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.isActive
-import kotlinx.coroutines.withContext
 
 @Composable
 fun ComposeMpvPlayer(
@@ -352,8 +351,12 @@ fun ComposeMpvPlayer(
                                     if (bytes != null && bytes.isNotEmpty()) {
                                         dest.writeBytes(bytes)
                                         dest
-                                    } else null
-                                } else null
+                                    } else {
+                                        null
+                                    }
+                                } else {
+                                    null
+                                }
                             } else {
                                 File(sub.url).takeIf { it.exists() }
                             }

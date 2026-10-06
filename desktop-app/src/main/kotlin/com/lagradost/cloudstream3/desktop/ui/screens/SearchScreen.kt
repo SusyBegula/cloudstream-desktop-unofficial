@@ -3,9 +3,9 @@ package com.lagradost.cloudstream3.desktop.ui.screens
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.grid.*
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.lazy.grid.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -117,8 +117,10 @@ fun SearchScreen(navController: NavController, viewModel: HomeViewModel, gridSta
                 placeholder = { Text("Search movies, TV shows and anime") },
                 leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
                 trailingIcon = {
-                    if (query.isNotEmpty()) IconButton(onClick = { viewModel.searchQuery.value = "" }) {
-                        Icon(Icons.Default.Close, contentDescription = "Clear search")
+                    if (query.isNotEmpty()) {
+                        IconButton(onClick = { viewModel.searchQuery.value = "" }) {
+                            Icon(Icons.Default.Close, contentDescription = "Clear search")
+                        }
                     }
                 },
                 singleLine = true,
@@ -269,7 +271,13 @@ fun SearchScreen(navController: NavController, viewModel: HomeViewModel, gridSta
         }
     } else {
         LazyVerticalGrid(
-            columns = GridCells.Adaptive(when (scale) { "Compact" -> 140.dp; "Large" -> 210.dp; else -> 170.dp }),
+            columns = GridCells.Adaptive(
+                when (scale) {
+                    "Compact" -> 140.dp
+                    "Large" -> 210.dp
+                    else -> 170.dp
+                },
+            ),
             state = gridState,
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(bottom = 32.dp),

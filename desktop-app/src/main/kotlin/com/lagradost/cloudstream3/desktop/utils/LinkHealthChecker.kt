@@ -3,7 +3,6 @@ package com.lagradost.cloudstream3.desktop.utils
 import com.lagradost.cloudstream3.app
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.ExtractorLinkPlayList
-import com.lagradost.common.logging.AppLogger
 import com.lagradost.player.impl.PlayerLinkHandler
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -111,8 +110,8 @@ object LinkHealthChecker {
                     }
 
                     val isM3u8 = peekString.startsWith("#EXTM3U") ||
-                            targetUrl.contains(".m3u8", ignoreCase = true) ||
-                            contentType.contains("mpegurl")
+                        targetUrl.contains(".m3u8", ignoreCase = true) ||
+                        contentType.contains("mpegurl")
 
                     val isHtml = (contentType.contains("text/html") || peekString.trimStart().startsWith("<")) && !isM3u8
 
@@ -120,11 +119,11 @@ object LinkHealthChecker {
                         // Check if it's a known error or removal page
                         val lower = peekString.lowercase()
                         val isRemovalPage = lower.contains("not found") ||
-                                lower.contains("deleted") ||
-                                lower.contains("removed") ||
-                                lower.contains("cloudflare") ||
-                                lower.contains("turnstile") ||
-                                lower.contains("ddos-guard")
+                            lower.contains("deleted") ||
+                            lower.contains("removed") ||
+                            lower.contains("cloudflare") ||
+                            lower.contains("turnstile") ||
+                            lower.contains("ddos-guard")
 
                         return LinkHealth(
                             status = LinkHealthStatus.OFFLINE,

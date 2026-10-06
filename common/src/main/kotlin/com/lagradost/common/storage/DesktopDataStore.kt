@@ -5,11 +5,11 @@ import com.fasterxml.jackson.databind.DeserializationFeature
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.fasterxml.jackson.module.kotlin.readValue
+import com.lagradost.common.logging.AppLogger
 import com.lagradost.common.platform.PlatformPaths
+import kotlinx.coroutines.flow.MutableStateFlow
 import java.io.File
 import java.util.concurrent.ConcurrentHashMap
-import kotlinx.coroutines.flow.MutableStateFlow
-import com.lagradost.common.logging.AppLogger
 
 data class DesktopBookmark(
     // E.g., "${apiName}_${url.hashCode()}"
@@ -44,7 +44,7 @@ data class PluginUpdateRecord(
     val pluginName: String,
     val version: Int,
     val iconUrl: String?,
-    val timestamp: Long = System.currentTimeMillis()
+    val timestamp: Long = System.currentTimeMillis(),
 )
 
 data class DownloadedItemRecord(
@@ -138,8 +138,6 @@ object DesktopDataStore {
         }
     }
 
-
-
     private const val BOOKMARKS_KEY = "user_bookmarks"
 
     fun getBookmarks(): List<DesktopBookmark> {
@@ -168,8 +166,6 @@ object DesktopDataStore {
     fun isBookmarked(id: String): Boolean {
         return getBookmarks().any { it.id == id }
     }
-
-
 
     private const val WATCH_HISTORY_KEY = "user_watch_history"
 
@@ -255,8 +251,6 @@ object DesktopDataStore {
         return getAllWatchHistory().find { it.parentId == parentId && it.episodeId == episodeId }
     }
 
-
-
     private const val UPDATES_HISTORY_KEY = "plugin_updates_history_v2"
     private const val UNREAD_UPDATES_KEY = "unread_plugin_updates"
 
@@ -271,14 +265,14 @@ object DesktopDataStore {
 
     fun addUpdateHistory(history: List<PluginUpdateRecord>) {
         if (history.isEmpty()) return
-        
+
         val consolidatedHistory = history.sortedByDescending { it.timestamp }
             .distinctBy { it.pluginName }
-            
+
         val current = getUpdatesHistory().toMutableList()
         val incomingNames = consolidatedHistory.map { it.pluginName }.toSet()
         current.removeAll { it.pluginName in incomingNames }
-        
+
         current.addAll(0, consolidatedHistory) // add to top
         current.sortByDescending { it.timestamp }
         if (current.size > 50) {

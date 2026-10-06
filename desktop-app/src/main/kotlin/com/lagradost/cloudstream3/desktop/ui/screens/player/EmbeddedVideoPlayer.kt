@@ -45,7 +45,7 @@ fun EmbeddedVideoPlayer(
                 windowState?.placement ?: WindowPlacement.Maximized
             } else {
                 WindowPlacement.Maximized
-            }
+            },
         )
     }
 

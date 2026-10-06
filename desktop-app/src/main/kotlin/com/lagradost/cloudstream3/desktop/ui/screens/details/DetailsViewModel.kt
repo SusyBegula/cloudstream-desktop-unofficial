@@ -196,7 +196,9 @@ object GlobalDetailsCache {
                 // Fix 1: Prioritize Direct ID Resolution (TMDB ID or IMDb ID)
                 val existingTmdbId = try {
                     LoadResponse.Companion.run { loaded.getTMDbId() }?.toIntOrNull()
-                } catch (_: Throwable) { null }
+                } catch (_: Throwable) {
+                    null
+                }
                     ?: loaded.syncData["tmdb"]?.toIntOrNull()
                     ?: Regex("""["']tmdb(?:Id)?["']\s*:\s*(\d+)""").find(url)?.groupValues?.get(1)?.toIntOrNull()
 
@@ -208,7 +210,9 @@ object GlobalDetailsCache {
                 if (matchedId == null) {
                     val existingImdbId = try {
                         LoadResponse.Companion.run { loaded.getImdbId() }
-                    } catch (_: Throwable) { null }
+                    } catch (_: Throwable) {
+                        null
+                    }
                         ?: loaded.syncData["imdb"]
                         ?: Regex("""\b(tt\d{7,10})\b""").find(url)?.groupValues?.get(1)
                         ?: Regex("""\b(tt\d{7,10})\b""").find(loaded.url)?.groupValues?.get(1)

@@ -10,7 +10,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material3.*
@@ -22,7 +21,6 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import coil3.compose.AsyncImage
 import com.lagradost.cloudstream3.APIHolder
@@ -65,12 +63,14 @@ fun BrowseScreen(
     var resolvingTitleKey by remember { mutableStateOf<String?>(null) }
     val coroutineScope = rememberCoroutineScope()
 
-    val selectedProvider by (homeViewModel?.selectedProvider ?: remember {
-        val saved = com.lagradost.common.storage.DesktopDataStore.getKey<String>(PREF_SELECTED_PROVIDER)
-        val prov = APIHolder.allProviders.firstOrNull { it.name == saved && it.isRealProvider() }
-            ?: APIHolder.allProviders.firstOrNull { it.isRealProvider() }
-        kotlinx.coroutines.flow.MutableStateFlow(prov)
-    }).collectAsState()
+    val selectedProvider by (
+        homeViewModel?.selectedProvider ?: remember {
+            val saved = com.lagradost.common.storage.DesktopDataStore.getKey<String>(PREF_SELECTED_PROVIDER)
+            val prov = APIHolder.allProviders.firstOrNull { it.name == saved && it.isRealProvider() }
+                ?: APIHolder.allProviders.firstOrNull { it.isRealProvider() }
+            kotlinx.coroutines.flow.MutableStateFlow(prov)
+        }
+        ).collectAsState()
 
     val gridScale by AppearanceConfig.gridScale.collectAsState()
     val minSize = when (gridScale) {
@@ -103,295 +103,297 @@ fun BrowseScreen(
             horizontalArrangement = Arrangement.spacedBy(horizontalSpacing),
             verticalArrangement = Arrangement.spacedBy(20.dp),
         ) {
-        item(span = { GridItemSpan(maxLineSpan) }) {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(categoryPage?.headerTitle ?: "Browser", style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold)
-                Text("Discover your next movie, show or anime.", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                if (categoryPage == null) FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    BrowseCategory.entries.forEach { category ->
-                        FilterChip(selected = filters.category == category, onClick = {
-                            viewModel.setFilters(filters.copy(category = category, genre = null))
-                        }, label = { Text(category.label) })
+            item(span = { GridItemSpan(maxLineSpan) }) {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(categoryPage?.headerTitle ?: "Browser", style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold)
+                    Text("Discover your next movie, show or anime.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    if (categoryPage == null) {
+                        FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            BrowseCategory.entries.forEach { category ->
+                                FilterChip(selected = filters.category == category, onClick = {
+                                    viewModel.setFilters(filters.copy(category = category, genre = null))
+                                }, label = { Text(category.label) })
+                            }
+                        }
                     }
                 }
             }
-        }
-        item(span = { GridItemSpan(maxLineSpan) }) {
-            val hasActiveFilters = filters.genre != null ||
-                filters.ageRating != null ||
-                filters.year != null ||
-                filters.minRating > 0 ||
-                (filters.language != null && filters.language != "en") ||
-                filters.sort != BrowseSort.POPULAR ||
-                (filters.category == BrowseCategory.ANIME && filters.animeMovies)
+            item(span = { GridItemSpan(maxLineSpan) }) {
+                val hasActiveFilters = filters.genre != null ||
+                    filters.ageRating != null ||
+                    filters.year != null ||
+                    filters.minRating > 0 ||
+                    (filters.language != null && filters.language != "en") ||
+                    filters.sort != BrowseSort.POPULAR ||
+                    (filters.category == BrowseCategory.ANIME && filters.animeMovies)
 
-            Surface(
-                shape = RoundedCornerShape(16.dp),
-                color = DesktopUi.SurfaceCard.copy(alpha = 0.65f),
-                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.08f)),
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 18.dp, vertical = 14.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                Surface(
+                    shape = RoundedCornerShape(16.dp),
+                    color = DesktopUi.SurfaceCard.copy(alpha = 0.65f),
+                    border = BorderStroke(1.dp, Color.White.copy(alpha = 0.08f)),
                 ) {
-                    FlowRow(
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                        verticalArrangement = Arrangement.spacedBy(10.dp),
-                        modifier = Modifier.fillMaxWidth(),
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 18.dp, vertical = 14.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
-                        if (filters.category == BrowseCategory.ANIME) {
-                            BrowseFilterChip(
-                                label = "Format",
-                                value = if (filters.animeMovies) "Movies" else "Shows",
-                                isActive = filters.animeMovies,
-                                selectedKey = filters.animeMovies,
-                                options = listOf(false to "Shows", true to "Movies"),
-                            ) {
-                                viewModel.setFilters(filters.copy(animeMovies = it, genre = null))
-                            }
-                        }
-
-                        val selectedGenre = filters.genres.firstOrNull { it.id == filters.genre }
-                        BrowseFilterChip(
-                            label = "Genre",
-                            value = selectedGenre?.label ?: "All genres",
-                            isActive = filters.genre != null,
-                            selectedKey = filters.genre,
-                            options = listOf(null to "All genres") + filters.genres.map { it.id to it.label },
+                        FlowRow(
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp),
+                            modifier = Modifier.fillMaxWidth(),
                         ) {
-                            viewModel.setFilters(filters.copy(genre = it))
-                        }
-
-                        val selectedAgeRating = findAgeRating(filters.ageRating)
-                        BrowseFilterChip(
-                            label = "Age rating",
-                            value = selectedAgeRating?.label ?: "All ratings",
-                            isActive = filters.ageRating != null,
-                            selectedKey = filters.ageRating,
-                            options = listOf(null to "All ratings") + filters.ageRatings.map { it.id to it.label },
-                        ) {
-                            viewModel.setFilters(filters.copy(ageRating = it))
-                        }
-
-                        BrowseFilterChip(
-                            label = "Year",
-                            value = filters.year?.toString() ?: "Any year",
-                            isActive = filters.year != null,
-                            selectedKey = filters.year,
-                            options = listOf(null to "Any year") + (Year.now().value downTo 1900).map { it to it.toString() },
-                        ) {
-                            viewModel.setFilters(filters.copy(year = it))
-                        }
-
-                        BrowseFilterChip(
-                            label = "TMDB rating",
-                            value = if (filters.minRating == 0) "Any rating" else "${filters.minRating}+ ★",
-                            isActive = filters.minRating > 0,
-                            selectedKey = filters.minRating,
-                            options = listOf(0 to "Any rating") + (5..9).map { it to "$it+ ★" },
-                        ) {
-                            viewModel.setFilters(filters.copy(minRating = it))
-                        }
-
-                        if (filters.category != BrowseCategory.ANIME) {
-                            val languages = listOf(
-                                null to "Any language", "en" to "English", "hi" to "Hindi", "ja" to "Japanese",
-                                "ko" to "Korean", "es" to "Spanish", "fr" to "French", "de" to "German", "zh" to "Chinese",
-                                "ta" to "Tamil", "te" to "Telugu", "ml" to "Malayalam", "kn" to "Kannada",
-                            )
-                            val selectedLang = languages.firstOrNull { it.first == filters.language }?.second ?: "Any language"
-                            BrowseFilterChip(
-                                label = "Language",
-                                value = selectedLang,
-                                isActive = filters.language != null && filters.language != "en",
-                                selectedKey = filters.language,
-                                options = languages,
-                            ) {
-                                viewModel.setFilters(filters.copy(language = it))
-                            }
-                        }
-
-                        BrowseFilterChip(
-                            label = "Sort by",
-                            value = filters.sort.label,
-                            isActive = filters.sort != BrowseSort.POPULAR,
-                            selectedKey = filters.sort,
-                            options = BrowseSort.entries.map { it to it.label },
-                        ) {
-                            viewModel.setFilters(filters.copy(sort = it))
-                        }
-
-                        if (hasActiveFilters) {
-                            Surface(
-                                onClick = { viewModel.setFilters(BrowseFilters(category = filters.category)) },
-                                shape = RoundedCornerShape(10.dp),
-                                color = Color.Red.copy(alpha = 0.12f),
-                                border = BorderStroke(1.dp, Color.Red.copy(alpha = 0.35f)),
-                            ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            if (filters.category == BrowseCategory.ANIME) {
+                                BrowseFilterChip(
+                                    label = "Format",
+                                    value = if (filters.animeMovies) "Movies" else "Shows",
+                                    isActive = filters.animeMovies,
+                                    selectedKey = filters.animeMovies,
+                                    options = listOf(false to "Shows", true to "Movies"),
                                 ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Close,
-                                        contentDescription = "Reset filters",
-                                        modifier = Modifier.size(14.dp),
-                                        tint = Color(0xFFFF6B6B),
-                                    )
-                                    Text(
-                                        text = "Reset filters",
-                                        style = MaterialTheme.typography.labelMedium,
-                                        fontWeight = FontWeight.SemiBold,
-                                        color = Color(0xFFFF6B6B),
-                                    )
+                                    viewModel.setFilters(filters.copy(animeMovies = it, genre = null))
                                 }
                             }
-                        }
-                    }
 
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Text(
-                            text = buildString {
-                                append("Catalog and ratings from TMDB")
-                                if (filters.category == BrowseCategory.ANIME) append(" · Japanese animation")
-                                if (filters.sort == BrowseSort.RATING || filters.minRating > 0) append(" · At least 100 votes")
-                            },
-                            style = MaterialTheme.typography.bodySmall,
-                            color = DesktopUi.TextMuted,
-                        )
-                        if (state.titles.isNotEmpty()) {
-                            Text(
-                                text = "${state.totalResults} titles",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = DesktopUi.TextMuted,
-                            )
-                        }
-                    }
-                }
-            }
-        }
-        itemsIndexed(state.titles, key = { index, title -> "${state.page}_${title.key}_$index" }) { _, title ->
-            BrowseCard(
-                title = title,
-                isLoading = resolvingTitleKey == title.key,
-                onClick = {
-                    val provider = selectedProvider
-                    if (provider != null) {
-                        coroutineScope.launch {
-                            resolvingTitleKey = title.key
-                            try {
-                                val searchResponse = withContext(Dispatchers.IO) {
-                                    withTimeoutOrNull(15_000) {
-                                        provider.search(title.name, 1)
+                            val selectedGenre = filters.genres.firstOrNull { it.id == filters.genre }
+                            BrowseFilterChip(
+                                label = "Genre",
+                                value = selectedGenre?.label ?: "All genres",
+                                isActive = filters.genre != null,
+                                selectedKey = filters.genre,
+                                options = listOf(null to "All genres") + filters.genres.map { it.id to it.label },
+                            ) {
+                                viewModel.setFilters(filters.copy(genre = it))
+                            }
+
+                            val selectedAgeRating = findAgeRating(filters.ageRating)
+                            BrowseFilterChip(
+                                label = "Age rating",
+                                value = selectedAgeRating?.label ?: "All ratings",
+                                isActive = filters.ageRating != null,
+                                selectedKey = filters.ageRating,
+                                options = listOf(null to "All ratings") + filters.ageRatings.map { it.id to it.label },
+                            ) {
+                                viewModel.setFilters(filters.copy(ageRating = it))
+                            }
+
+                            BrowseFilterChip(
+                                label = "Year",
+                                value = filters.year?.toString() ?: "Any year",
+                                isActive = filters.year != null,
+                                selectedKey = filters.year,
+                                options = listOf(null to "Any year") + (Year.now().value downTo 1900).map { it to it.toString() },
+                            ) {
+                                viewModel.setFilters(filters.copy(year = it))
+                            }
+
+                            BrowseFilterChip(
+                                label = "TMDB rating",
+                                value = if (filters.minRating == 0) "Any rating" else "${filters.minRating}+ ★",
+                                isActive = filters.minRating > 0,
+                                selectedKey = filters.minRating,
+                                options = listOf(0 to "Any rating") + (5..9).map { it to "$it+ ★" },
+                            ) {
+                                viewModel.setFilters(filters.copy(minRating = it))
+                            }
+
+                            if (filters.category != BrowseCategory.ANIME) {
+                                val languages = listOf(
+                                    null to "Any language", "en" to "English", "hi" to "Hindi", "ja" to "Japanese",
+                                    "ko" to "Korean", "es" to "Spanish", "fr" to "French", "de" to "German", "zh" to "Chinese",
+                                    "ta" to "Tamil", "te" to "Telugu", "ml" to "Malayalam", "kn" to "Kannada",
+                                )
+                                val selectedLang = languages.firstOrNull { it.first == filters.language }?.second ?: "Any language"
+                                BrowseFilterChip(
+                                    label = "Language",
+                                    value = selectedLang,
+                                    isActive = filters.language != null && filters.language != "en",
+                                    selectedKey = filters.language,
+                                    options = languages,
+                                ) {
+                                    viewModel.setFilters(filters.copy(language = it))
+                                }
+                            }
+
+                            BrowseFilterChip(
+                                label = "Sort by",
+                                value = filters.sort.label,
+                                isActive = filters.sort != BrowseSort.POPULAR,
+                                selectedKey = filters.sort,
+                                options = BrowseSort.entries.map { it to it.label },
+                            ) {
+                                viewModel.setFilters(filters.copy(sort = it))
+                            }
+
+                            if (hasActiveFilters) {
+                                Surface(
+                                    onClick = { viewModel.setFilters(BrowseFilters(category = filters.category)) },
+                                    shape = RoundedCornerShape(10.dp),
+                                    color = Color.Red.copy(alpha = 0.12f),
+                                    border = BorderStroke(1.dp, Color.Red.copy(alpha = 0.35f)),
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Close,
+                                            contentDescription = "Reset filters",
+                                            modifier = Modifier.size(14.dp),
+                                            tint = Color(0xFFFF6B6B),
+                                        )
+                                        Text(
+                                            text = "Reset filters",
+                                            style = MaterialTheme.typography.labelMedium,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = Color(0xFFFF6B6B),
+                                        )
                                     }
                                 }
-                                val items = searchResponse?.items.orEmpty()
-                                val match = items.firstOrNull { it.name.trim().equals(title.name.trim(), ignoreCase = true) }
-                                    ?: items.firstOrNull { it.name.contains(title.name.trim(), ignoreCase = true) }
-                                    ?: items.firstOrNull()
-
-                                if (match != null) {
-                                    navController.navigate(
-                                        Screen.Details(
-                                            provider = provider,
-                                            url = match.url,
-                                            preloadedName = match.name,
-                                            preloadedPoster = match.posterUrl ?: title.poster,
-                                        )
-                                    )
-                                } else {
-                                    fallbackNotice = "Could not find “${title.name}” on ${provider.name}. Choose from another provider below:"
-                                    selected = title
-                                }
-                            } catch (e: CancellationException) {
-                                throw e
-                            } catch (e: Exception) {
-                                com.lagradost.common.logging.AppLogger.e("BrowseScreen: Failed to resolve ${title.name} on ${provider.name}", e)
-                                fallbackNotice = "Error connecting to ${provider.name}. Choose from another provider below:"
-                                selected = title
-                            } finally {
-                                resolvingTitleKey = null
                             }
                         }
-                    } else {
-                        fallbackNotice = null
-                        selected = title
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                text = buildString {
+                                    append("Catalog and ratings from TMDB")
+                                    if (filters.category == BrowseCategory.ANIME) append(" · Japanese animation")
+                                    if (filters.sort == BrowseSort.RATING || filters.minRating > 0) append(" · At least 100 votes")
+                                },
+                                style = MaterialTheme.typography.bodySmall,
+                                color = DesktopUi.TextMuted,
+                            )
+                            if (state.titles.isNotEmpty()) {
+                                Text(
+                                    text = "${state.totalResults} titles",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = DesktopUi.TextMuted,
+                                )
+                            }
+                        }
                     }
+                }
+            }
+            itemsIndexed(state.titles, key = { index, title -> "${state.page}_${title.key}_$index" }) { _, title ->
+                BrowseCard(
+                    title = title,
+                    isLoading = resolvingTitleKey == title.key,
+                    onClick = {
+                        val provider = selectedProvider
+                        if (provider != null) {
+                            coroutineScope.launch {
+                                resolvingTitleKey = title.key
+                                try {
+                                    val searchResponse = withContext(Dispatchers.IO) {
+                                        withTimeoutOrNull(15_000) {
+                                            provider.search(title.name, 1)
+                                        }
+                                    }
+                                    val items = searchResponse?.items.orEmpty()
+                                    val match = items.firstOrNull { it.name.trim().equals(title.name.trim(), ignoreCase = true) }
+                                        ?: items.firstOrNull { it.name.contains(title.name.trim(), ignoreCase = true) }
+                                        ?: items.firstOrNull()
+
+                                    if (match != null) {
+                                        navController.navigate(
+                                            Screen.Details(
+                                                provider = provider,
+                                                url = match.url,
+                                                preloadedName = match.name,
+                                                preloadedPoster = match.posterUrl ?: title.poster,
+                                            ),
+                                        )
+                                    } else {
+                                        fallbackNotice = "Could not find “${title.name}” on ${provider.name}. Choose from another provider below:"
+                                        selected = title
+                                    }
+                                } catch (e: CancellationException) {
+                                    throw e
+                                } catch (e: Exception) {
+                                    com.lagradost.common.logging.AppLogger.e("BrowseScreen: Failed to resolve ${title.name} on ${provider.name}", e)
+                                    fallbackNotice = "Error connecting to ${provider.name}. Choose from another provider below:"
+                                    selected = title
+                                } finally {
+                                    resolvingTitleKey = null
+                                }
+                            }
+                        } else {
+                            fallbackNotice = null
+                            selected = title
+                        }
+                    },
+                )
+            }
+            item(span = { GridItemSpan(maxLineSpan) }) {
+                Column(
+                    Modifier.fillMaxWidth().padding(top = 16.dp, bottom = 24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    when {
+                        state.error != null -> {
+                            Text(state.error!!, color = MaterialTheme.colorScheme.error)
+                            Button(onClick = viewModel::retry) { Text("Try again") }
+                        }
+                        state.titles.isEmpty() && state.loading -> {
+                            CircularProgressIndicator()
+                            Text("Loading titles…")
+                        }
+                        state.titles.isEmpty() && !state.loading -> {
+                            Text("No titles match these filters.", style = MaterialTheme.typography.titleMedium)
+                            Text("Try another genre, age rating, year or rating.")
+                            OutlinedButton(onClick = { viewModel.setFilters(BrowseFilters(category = filters.category)) }) { Text("Reset filters") }
+                        }
+                        else -> {
+                            if (state.loading) {
+                                LinearProgressIndicator(
+                                    modifier = Modifier.fillMaxWidth(0.3f).padding(bottom = 8.dp),
+                                    color = DesktopUi.Accent,
+                                )
+                            }
+                            PaginationControls(
+                                currentPage = state.page,
+                                totalPages = state.totalPages,
+                                totalItems = state.totalResults,
+                                pageSize = state.pageSize,
+                                itemLabel = "titles",
+                                onPageChange = { targetPage ->
+                                    viewModel.loadPage(targetPage)
+                                    coroutineScope.launch {
+                                        gridState.scrollToItem(0)
+                                    }
+                                },
+                            )
+                        }
+                    }
+                }
+            }
+        }
+        selected?.let { title ->
+            BrowseSourcesDialog(
+                title = title,
+                notice = fallbackNotice,
+                onDismiss = {
+                    selected = null
+                    fallbackNotice = null
+                },
+                onExtensions = {
+                    selected = null
+                    fallbackNotice = null
+                    navController.navigate(Screen.Extensions)
+                },
+                onSelect = { provider, result ->
+                    selected = null
+                    fallbackNotice = null
+                    navController.navigate(Screen.Details(provider, result.url, result.name, result.posterUrl ?: title.poster))
                 },
             )
         }
-        item(span = { GridItemSpan(maxLineSpan) }) {
-            Column(
-                Modifier.fillMaxWidth().padding(top = 16.dp, bottom = 24.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                when {
-                    state.error != null -> {
-                        Text(state.error!!, color = MaterialTheme.colorScheme.error)
-                        Button(onClick = viewModel::retry) { Text("Try again") }
-                    }
-                    state.titles.isEmpty() && state.loading -> {
-                        CircularProgressIndicator()
-                        Text("Loading titles…")
-                    }
-                    state.titles.isEmpty() && !state.loading -> {
-                        Text("No titles match these filters.", style = MaterialTheme.typography.titleMedium)
-                        Text("Try another genre, age rating, year or rating.")
-                        OutlinedButton(onClick = { viewModel.setFilters(BrowseFilters(category = filters.category)) }) { Text("Reset filters") }
-                    }
-                    else -> {
-                        if (state.loading) {
-                            LinearProgressIndicator(
-                                modifier = Modifier.fillMaxWidth(0.3f).padding(bottom = 8.dp),
-                                color = DesktopUi.Accent,
-                            )
-                        }
-                        PaginationControls(
-                            currentPage = state.page,
-                            totalPages = state.totalPages,
-                            totalItems = state.totalResults,
-                            pageSize = state.pageSize,
-                            itemLabel = "titles",
-                            onPageChange = { targetPage ->
-                                viewModel.loadPage(targetPage)
-                                coroutineScope.launch {
-                                    gridState.scrollToItem(0)
-                                }
-                            },
-                        )
-                    }
-                }
-            }
-        }
-    }
-    selected?.let { title ->
-        BrowseSourcesDialog(
-            title = title,
-            notice = fallbackNotice,
-            onDismiss = {
-                selected = null
-                fallbackNotice = null
-            },
-            onExtensions = {
-                selected = null
-                fallbackNotice = null
-                navController.navigate(Screen.Extensions)
-            },
-            onSelect = { provider, result ->
-                selected = null
-                fallbackNotice = null
-                navController.navigate(Screen.Details(provider, result.url, result.name, result.posterUrl ?: title.poster))
-            },
-        )
-    }
     }
 }
 

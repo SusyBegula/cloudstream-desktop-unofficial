@@ -30,7 +30,7 @@ object ExtensionLoader {
         for (element in stackTrace) {
             val className = element.className
             if (className.startsWith("com.lagradost.") || className.startsWith("java.") || className.startsWith("kotlin.")) continue
-            
+
             for ((loader, name) in classLoaders) {
                 try {
                     val clazz = Class.forName(className, false, loader)
@@ -275,7 +275,6 @@ abstract class VerifiedRepoMixIn {
     @com.fasterxml.jackson.annotation.JsonCreator
     constructor(
         @com.fasterxml.jackson.annotation.JsonProperty("url") url: String?,
-        @com.fasterxml.jackson.annotation.JsonProperty("verified") verified: Boolean?
+        @com.fasterxml.jackson.annotation.JsonProperty("verified") verified: Boolean?,
     )
 }
-

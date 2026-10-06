@@ -15,7 +15,6 @@ import io.ktor.server.routing.get
 import io.ktor.server.routing.routing
 import io.ktor.utils.io.writeFully
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
@@ -26,7 +25,6 @@ import java.io.IOException
 import java.net.URI
 import java.util.Base64
 import java.util.UUID
-
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
@@ -65,7 +63,7 @@ object LocalStreamProxy {
             override fun removeEldestEntry(eldest: Map.Entry<String, ProxySession>): Boolean {
                 return size > 100
             }
-        }
+        },
     )
 
     private val proxyClient by lazy {

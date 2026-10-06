@@ -315,7 +315,9 @@ object DesktopAppUpdater {
             |
             |# Atomically replace target AppImage
             |mkdir -p "${targetAppImage.parentFile?.absolutePath ?: userHome.absolutePath}"
-            |cp -f "${installerFile.absolutePath}" "${targetAppImage.absolutePath}"
+            |cp -f "${installerFile.absolutePath}" "${targetAppImage.absolutePath}.tmp"
+            |chmod +x "${targetAppImage.absolutePath}.tmp"
+            |mv -f "${targetAppImage.absolutePath}.tmp" "${targetAppImage.absolutePath}"
             |chmod +x "${targetAppImage.absolutePath}"
             |rm -f "${installerFile.absolutePath}"
             |
@@ -323,7 +325,7 @@ object DesktopAppUpdater {
             |export _JAVA_AWT_WM_NONREPARENTING=1
             |nohup "${targetAppImage.absolutePath}" >/dev/null 2>&1 &
             |rm -f "${'$'}0"
-            """.trimMargin().trim() + "\n"
+            """.trimMargin().trim() + "\n",
         )
         scriptFile.setExecutable(true, false)
 
@@ -346,7 +348,7 @@ object DesktopAppUpdater {
                 |#!/usr/bin/env sh
                 |export _JAVA_AWT_WM_NONREPARENTING=1
                 |exec "${targetAppImage.absolutePath}" "$@"
-                """.trimMargin().trim() + "\n"
+                """.trimMargin().trim() + "\n",
             )
             launcher.setExecutable(true, false)
 
@@ -374,7 +376,7 @@ object DesktopAppUpdater {
                 |Categories=AudioVideo;Video;Player;Network;
                 |StartupWMClass=com.lagradost.cloudstream3.desktop.MainKt
                 |Keywords=stream;streaming;cloudstream;movie;tv;anime;video;
-                """.trimMargin().trim() + "\n"
+                """.trimMargin().trim() + "\n",
             )
 
             // 4. Update desktop database so Hyprland app launchers immediately refresh

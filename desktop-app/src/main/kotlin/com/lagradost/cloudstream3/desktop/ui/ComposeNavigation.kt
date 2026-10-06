@@ -93,7 +93,9 @@ fun CloudstreamApp() {
                                 )
                                 is Screen.Home -> ComposeHomeScreen(navController, homeViewModel)
                                 is Screen.Search -> com.lagradost.cloudstream3.desktop.ui.screens.SearchScreen(
-                                    navController, homeViewModel, searchGridState,
+                                    navController,
+                                    homeViewModel,
+                                    searchGridState,
                                 )
                                 is Screen.Catalog -> com.lagradost.cloudstream3.desktop.ui.screens.browse.BrowseScreen(
                                     navController,
@@ -112,10 +114,14 @@ fun CloudstreamApp() {
                                 is Screen.Library -> ComposeLibraryScreen(navController)
                                 is Screen.Downloads -> ComposeDownloadsScreen(navController)
                                 is Screen.Settings -> com.lagradost.cloudstream3.desktop.ui.screens.settings.ComposeSettingsScreen(
-                                    navController, onErrorLogs = { showErrorsDialog = true },
+                                    navController,
+                                    onErrorLogs = { showErrorsDialog = true },
                                 )
                                 is Screen.CategoryGrid -> com.lagradost.cloudstream3.desktop.ui.screens.ComposeCategoryGridScreen(
-                                    navController, targetScreen.provider, targetScreen.title, targetScreen.items,
+                                    navController,
+                                    targetScreen.provider,
+                                    targetScreen.title,
+                                    targetScreen.items,
                                 )
                             }
                         }

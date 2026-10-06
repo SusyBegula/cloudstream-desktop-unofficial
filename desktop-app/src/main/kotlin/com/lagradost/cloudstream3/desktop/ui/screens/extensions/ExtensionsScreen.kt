@@ -1,8 +1,5 @@
 package com.lagradost.cloudstream3.desktop.ui.screens.extensions
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -35,7 +32,6 @@ import com.lagradost.cloudstream3.desktop.ui.navigation.NavController
 import com.lagradost.cloudstream3.desktop.ui.screens.PluginSettingsDialog
 import com.lagradost.cloudstream3.desktop.ui.theme.AppearanceConfig
 import com.lagradost.cloudstream3.ui.settings.extensions.RepositoryData
-import com.lagradost.runtime.loader.ExtensionLoader
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -169,9 +165,12 @@ private fun ExtensionsListView(
     }
 
     val filteredRepos = remember(savedRepos, searchQuery) {
-        if (searchQuery.isBlank()) savedRepos
-        else savedRepos.filter {
-            it.name.contains(searchQuery, ignoreCase = true) || it.url.contains(searchQuery, ignoreCase = true)
+        if (searchQuery.isBlank()) {
+            savedRepos
+        } else {
+            savedRepos.filter {
+                it.name.contains(searchQuery, ignoreCase = true) || it.url.contains(searchQuery, ignoreCase = true)
+            }
         }
     }
 
@@ -591,7 +590,7 @@ private fun ExtensionDetailView(
             matchesSearch && matchesLang && matchesCat && matchesStatus
         }.sortedWith(
             compareByDescending<SitePlugin> { installedSet.contains(it.internalName) }
-                .thenBy { it.name.lowercase() }
+                .thenBy { it.name.lowercase() },
         )
     }
 

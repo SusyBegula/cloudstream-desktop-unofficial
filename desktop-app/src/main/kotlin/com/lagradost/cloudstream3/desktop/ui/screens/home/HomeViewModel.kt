@@ -7,17 +7,14 @@ import com.lagradost.cloudstream3.desktop.DesktopErrorReporter
 import com.lagradost.cloudstream3.desktop.repo.DesktopRepositoryManager
 import com.lagradost.common.storage.DesktopDataStore
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
-import kotlinx.coroutines.withContext
 
 const val PREF_SELECTED_PROVIDER = "preferred_provider_name"
 const val PREF_GLOBAL_SEARCH = "global_search_enabled"
@@ -348,5 +345,4 @@ class HomeViewModel(private val coroutineScope: CoroutineScope) {
         DesktopDataStore.removeWatchHistory(parentId)
         updateHistory()
     }
-
 }

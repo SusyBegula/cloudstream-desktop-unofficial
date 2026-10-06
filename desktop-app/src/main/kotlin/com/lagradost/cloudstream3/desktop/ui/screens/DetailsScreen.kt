@@ -1,10 +1,5 @@
 package com.lagradost.cloudstream3.desktop.ui.screens
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -13,16 +8,12 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SkipNext
@@ -33,19 +24,19 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.lagradost.cloudstream3.desktop.ui.components.PaginationControls
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.desktop.ui.components.DesktopUi
+import com.lagradost.cloudstream3.desktop.ui.components.PaginationControls
 import com.lagradost.cloudstream3.desktop.ui.navigation.NavController
 import com.lagradost.cloudstream3.desktop.ui.screens.details.*
 import com.lagradost.player.impl.PlayerLinkHandler
 import dev.chrisbanes.haze.HazeState
-import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -195,7 +186,7 @@ fun DetailsContent(
             latestHistory?.season?.takeIf { it in seasons }
                 ?: lastSavedSeason?.takeIf { it in seasons }
                 ?: seasons.firstOrNull()
-                ?: 1
+                ?: 1,
         )
     }
 
@@ -259,8 +250,9 @@ fun DetailsContent(
     }
 
     val pagedEpisodes = remember(allEpisodes, currentPage, totalPages, enrichmentTrigger) {
-        if (allEpisodes.isEmpty()) emptyList()
-        else {
+        if (allEpisodes.isEmpty()) {
+            emptyList()
+        } else {
             val page = currentPage.coerceIn(1, maxOf(1, totalPages))
             val start = ((page - 1) * pageSize).coerceIn(0, allEpisodes.size)
             val end = (start + pageSize).coerceIn(0, allEpisodes.size)
@@ -719,8 +711,11 @@ private fun EpisodeToolbar(
                 if (seasons.size > 1) {
                     var isSeasonMenuOpen by remember { mutableStateOf(false) }
                     val seasonNamesMap = remember(data) {
-                        if (data is TvSeriesLoadResponse) data.seasonNames?.associateBy { it.season } ?: emptyMap()
-                        else emptyMap()
+                        if (data is TvSeriesLoadResponse) {
+                            data.seasonNames?.associateBy { it.season } ?: emptyMap()
+                        } else {
+                            emptyMap()
+                        }
                     }
 
                     Box {

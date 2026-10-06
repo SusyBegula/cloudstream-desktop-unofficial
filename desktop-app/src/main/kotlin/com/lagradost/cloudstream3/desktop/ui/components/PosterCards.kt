@@ -166,12 +166,13 @@ fun PosterCard(
                     ) {
                         Box(
                             Modifier.size(6.dp).background(
-                                if (resolvedType == com.lagradost.cloudstream3.TvType.Movie || resolvedType == com.lagradost.cloudstream3.TvType.AnimeMovie)
+                                if (resolvedType == com.lagradost.cloudstream3.TvType.Movie || resolvedType == com.lagradost.cloudstream3.TvType.AnimeMovie) {
                                     Color(0xFF38BDF8)
-                                else
-                                    Color(0xFFA855F7),
+                                } else {
+                                    Color(0xFFA855F7)
+                                },
                                 CircleShape,
-                            )
+                            ),
                         )
                         Text(
                             text = mediaTypeLabel,
