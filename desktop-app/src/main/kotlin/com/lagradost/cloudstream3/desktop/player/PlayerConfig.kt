@@ -58,6 +58,6 @@ object PlayerConfig {
         lib.mpv_set_option_string(handle, "demuxer-max-bytes", "150M")
         lib.mpv_set_option_string(handle, "demuxer-max-back-bytes", "0")
         lib.mpv_set_option_string(handle, "demuxer-readahead-secs", "20")
-        lib.mpv_set_option_string(handle, "script-opts", "osc-seekbarkeyframes=yes")
+        lib.mpv_set_option_string(handle, "script-opts", "osc-seekbarkeyframes=yes,osc-visibility=auto")
     }
 }
