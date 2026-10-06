@@ -254,5 +254,30 @@ class BrowseTest {
         }
     }
 
+    @Test
+    fun duplicateTitlesAcrossTmdbPagesAreDeduplicatedWithoutCrashing() {
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
+        try {
+            // Suppose TMDB page 1 has movie 1, 2. TMDB page 2 has movie 2 (duplicate across boundary), 3.
+            val vm = BrowseViewModel(scope, defaultPageSize = 2) { _, page ->
+                when (page) {
+                    1 -> BrowsePage(listOf(title(1), title(2)), 1, 3, 4)
+                    2 -> BrowsePage(listOf(title(2), title(3)), 2, 3, 4)
+                    else -> BrowsePage(listOf(title(4)), 3, 3, 4)
+                }
+            }
+            vm.ensureLoaded()
+            assertEquals(listOf(1, 2), vm.state.value.titles.map { it.id })
+
+            vm.nextPage()
+            // Page 2 should have movie 3 and 4 (movie 2 is not duplicated!)
+            assertEquals(listOf(3, 4), vm.state.value.titles.map { it.id })
+            // Ensure no duplicate keys anywhere
+            assertEquals(vm.state.value.titles.size, vm.state.value.titles.distinctBy { it.key }.size)
+        } finally {
+            scope.cancel()
+        }
+    }
+
     private fun title(id: Int) = BrowseTitle(id, "Title $id", true, null, "", 2020, 7.0)
 }

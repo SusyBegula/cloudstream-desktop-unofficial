@@ -92,7 +92,7 @@ class BrowseViewModel(
 
     private fun getAllLoadedTitles(): List<BrowseTitle> {
         val pages = tmdbCache.keys.sorted()
-        return pages.flatMap { tmdbCache[it].orEmpty() }
+        return pages.flatMap { tmdbCache[it].orEmpty() }.distinctBy { it.key }
     }
 
     fun loadPage(targetPage: Int) {

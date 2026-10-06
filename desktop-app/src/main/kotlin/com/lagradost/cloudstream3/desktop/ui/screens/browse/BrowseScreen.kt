@@ -277,16 +277,7 @@ fun BrowseScreen(
                 }
             }
         }
-        if (state.titles.isNotEmpty()) {
-            item(span = { GridItemSpan(maxLineSpan) }) {
-                Text(
-                    "${state.totalResults} titles · ${state.titles.size} loaded",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
-        items(state.titles, key = { it.key }) { title ->
+        itemsIndexed(state.titles, key = { index, title -> "${state.page}_${title.key}_$index" }) { _, title ->
             BrowseCard(
                 title = title,
                 isLoading = resolvingTitleKey == title.key,
