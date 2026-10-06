@@ -42,16 +42,16 @@ fun EmbeddedVideoPlayer(
     var previousPlacement by remember {
         mutableStateOf(
             if (windowState?.placement != WindowPlacement.Fullscreen) {
-                windowState?.placement ?: WindowPlacement.Floating
+                windowState?.placement ?: WindowPlacement.Maximized
             } else {
-                WindowPlacement.Floating
+                WindowPlacement.Maximized
             }
         )
     }
 
     LaunchedEffect(Unit) {
         if (autoFullscreen && windowState?.placement != WindowPlacement.Fullscreen) {
-            previousPlacement = windowState?.placement ?: WindowPlacement.Floating
+            previousPlacement = windowState?.placement ?: WindowPlacement.Maximized
             windowState?.placement = WindowPlacement.Fullscreen
         }
     }
@@ -127,6 +127,7 @@ fun EmbeddedVideoPlayer(
                             title = launchData.title,
                             subtitles = launchData.subtitles,
                             startPositionMs = currentStartPositionMs,
+                            isFullscreen = isFullscreen,
                             onPlaybackReady = {
                                 isLoading = false
                             },
@@ -156,14 +157,12 @@ fun EmbeddedVideoPlayer(
                                 }
                                 isFinished = true
                             },
-                            onFullscreenToggle = { fs ->
-                                if (fs) {
-                                    if (windowState?.placement != WindowPlacement.Fullscreen) {
-                                        previousPlacement = windowState?.placement ?: WindowPlacement.Floating
-                                        windowState?.placement = WindowPlacement.Fullscreen
-                                    }
+                            onToggleFullscreen = {
+                                if (windowState?.placement == WindowPlacement.Fullscreen) {
+                                    windowState.placement = previousPlacement
                                 } else {
-                                    windowState?.placement = previousPlacement
+                                    previousPlacement = windowState?.placement ?: WindowPlacement.Maximized
+                                    windowState?.placement = WindowPlacement.Fullscreen
                                 }
                             },
                             onPositionChange = { posMs, durMs ->

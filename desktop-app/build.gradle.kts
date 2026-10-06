@@ -177,7 +177,7 @@ compose.desktop {
             }
 
             packageName = "CloudStream-Desktop"
-            packageVersion = "0.1.2"
+            packageVersion = "0.1.3"
             description = "CloudStream Desktop Client"
             vendor = "CloudStream"
             includeAllModules = true // Required — jlink cannot detect dynamically-loaded modules (JNA, Playwright, Conscrypt)
@@ -214,7 +214,7 @@ val packageAppImageFile by tasks.registering {
     dependsOn("packageAppImage")
 
     doLast {
-        val appVersion = "0.1.2"
+        val appVersion = "0.1.3"
         val buildDir = layout.buildDirectory.get().asFile
         val distDir = buildDir.resolve("compose/binaries/main/app/CloudStream-Desktop")
         if (!distDir.exists()) {

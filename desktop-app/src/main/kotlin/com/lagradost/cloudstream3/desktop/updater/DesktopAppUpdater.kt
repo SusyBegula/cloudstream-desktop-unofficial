@@ -20,7 +20,7 @@ import kotlin.system.exitProcess
 
 object DesktopAppUpdater {
 
-    const val CURRENT_VERSION = "0.1.2"
+    const val CURRENT_VERSION = "0.1.3"
     private const val GITHUB_REPO = "SusyBegula/cloudstream-desktop-unofficial"
     const val PREF_AUTO_CHECK_UPDATES = "pref_auto_check_updates"
     const val PREF_IGNORED_UPDATE_TAG = "pref_ignored_update_tag"

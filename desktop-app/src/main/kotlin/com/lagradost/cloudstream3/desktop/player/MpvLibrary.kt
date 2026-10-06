@@ -65,6 +65,62 @@ interface X11Library : Library {
     }
 }
 
+interface User32Library : Library {
+    fun FindWindowExA(hwndParent: Pointer?, hwndChildAfter: Pointer?, lpszClass: String?, lpszWindow: String?): Pointer?
+    fun GetWindowLongA(hWnd: Pointer?, nIndex: Int): Int
+    fun SetWindowLongA(hWnd: Pointer?, nIndex: Int, dwNewLong: Int): Int
+
+    companion object {
+        const val GWL_EXSTYLE = -20
+        const val WS_EX_TRANSPARENT = 0x00000020
+
+        val INSTANCE: User32Library? by lazy {
+            val isWin = System.getProperty("os.name").lowercase().contains("win")
+            if (isWin) {
+                try {
+                    Native.load("user32", User32Library::class.java) as User32Library
+                } catch (e: Throwable) {
+                    AppLogger.w("Failed to load user32 library: ${e.message}")
+                    null
+                }
+            } else null
+        }
+
+        fun makeTransparent(parentHwndPtr: Pointer?): Boolean {
+            val lib = INSTANCE ?: return false
+            if (parentHwndPtr == null) return false
+            return try {
+                var child = lib.FindWindowExA(parentHwndPtr, null, null, null)
+                var count = 0
+                while (child != null) {
+                    val current = lib.GetWindowLongA(child, GWL_EXSTYLE)
+                    if ((current and WS_EX_TRANSPARENT) == 0) {
+                        lib.SetWindowLongA(child, GWL_EXSTYLE, current or WS_EX_TRANSPARENT)
+                        AppLogger.i("Applied WS_EX_TRANSPARENT to child HWND: $child")
+                    }
+
+                    var grandChild = lib.FindWindowExA(child, null, null, null)
+                    while (grandChild != null) {
+                        val gcCurrent = lib.GetWindowLongA(grandChild, GWL_EXSTYLE)
+                        if ((gcCurrent and WS_EX_TRANSPARENT) == 0) {
+                            lib.SetWindowLongA(grandChild, GWL_EXSTYLE, gcCurrent or WS_EX_TRANSPARENT)
+                            AppLogger.i("Applied WS_EX_TRANSPARENT to grandchild HWND: $grandChild")
+                        }
+                        grandChild = lib.FindWindowExA(child, grandChild, null, null)
+                    }
+
+                    count++
+                    child = lib.FindWindowExA(parentHwndPtr, child, null, null)
+                }
+                count > 0
+            } catch (e: Throwable) {
+                AppLogger.w("Failed to apply WS_EX_TRANSPARENT: ${e.message}")
+                false
+            }
+        }
+    }
+}
+
 interface MpvLibrary : Library {
     fun mpv_create(): Pointer?
     fun mpv_initialize(handle: Pointer): Int

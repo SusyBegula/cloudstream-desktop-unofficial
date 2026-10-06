@@ -80,6 +80,7 @@ fun main() {
         val windowWidth = (screenSize.width * 0.7).toInt().dp
         val windowHeight = (screenSize.height * 0.7).toInt().dp
         val state = androidx.compose.ui.window.rememberWindowState(
+            placement = androidx.compose.ui.window.WindowPlacement.Maximized,
             width = windowWidth,
             height = windowHeight,
             position = androidx.compose.ui.window.WindowPosition.Aligned(androidx.compose.ui.Alignment.Center),

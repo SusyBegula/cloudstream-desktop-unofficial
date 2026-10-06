@@ -23,21 +23,20 @@ fun ComposeMpvPlayer(
     title: String?,
     subtitles: List<com.lagradost.cloudstream3.SubtitleFile>,
     startPositionMs: Long,
+    isFullscreen: Boolean,
     onPlaybackReady: () -> Unit,
     onPlaybackError: (String) -> Unit,
     onFinished: () -> Unit,
-    onFullscreenToggle: (Boolean) -> Unit,
+    onToggleFullscreen: () -> Unit,
     onPositionChange: (Long, Long) -> Unit,
     onCloseRequest: () -> Unit,
     modifier: Modifier = Modifier.fillMaxSize(),
 ) {
     var mpvHandle by remember { mutableStateOf<com.sun.jna.Pointer?>(null) }
     var hasEverPlayed by remember { mutableStateOf(false) }
-    val autoFullscreen = remember {
-        com.lagradost.common.storage.DesktopDataStore.getKey<Boolean>(PlayerConfig.PREF_AUTO_FULLSCREEN) ?: true
-    }
-    var lastFullscreenState by remember { mutableStateOf(autoFullscreen) }
+    var lastMpvFullscreenState by remember { mutableStateOf<Boolean?>(null) }
     var lastSpeed by remember { mutableStateOf<String?>(null) }
+    var canvasWidRaw by remember { mutableStateOf(0L) }
     val isDisposed = remember { java.util.concurrent.atomic.AtomicBoolean(false) }
     val isDestroyed = remember { java.util.concurrent.atomic.AtomicBoolean(false) }
     val handleLock = remember { Any() }
@@ -65,11 +64,28 @@ fun ComposeMpvPlayer(
         }
     }
 
+    // Keep MPV in sync with Compose window fullscreen placement
+    LaunchedEffect(isFullscreen, mpvHandle) {
+        val h = mpvHandle ?: return@LaunchedEffect
+        sendMpvCommand(h, if (isFullscreen) "set fullscreen yes" else "set fullscreen no", isDisposed, handleLock)
+    }
+
     LaunchedEffect(mpvHandle) {
         val h = mpvHandle ?: return@LaunchedEffect
         withContext(Dispatchers.IO) {
             val startTime = System.currentTimeMillis()
+            var childHwndStyled = false
+            val isWindows = System.getProperty("os.name").lowercase().contains("win")
             while (isActive && !isDisposed.get()) {
+                // Ensure Win32 child window has WS_EX_TRANSPARENT as soon as it is created by MPV
+                if (isWindows && !childHwndStyled && canvasWidRaw != 0L) {
+                    try {
+                        if (User32Library.makeTransparent(com.sun.jna.Pointer.createConstant(canvasWidRaw))) {
+                            childHwndStyled = true
+                        }
+                    } catch (_: Throwable) {}
+                }
+
                 // Persist playback speed whenever the user changes it (e.g. via mpv's [ ] keys)
                 val speedStr = synchronized(handleLock) {
                     if (!isDisposed.get()) MpvLibrary.INSTANCE.getProperty(h, "speed") else null
@@ -108,17 +124,21 @@ fun ComposeMpvPlayer(
 
                 if (isDisposed.get()) break
 
-                // Check fullscreen state
+                // Check fullscreen state (e.g. if toggled via MPV OSC button or shortcut)
                 val fsStr = synchronized(handleLock) {
                     if (!isDisposed.get()) MpvLibrary.INSTANCE.getProperty(h, "fullscreen") else null
                 }
                 if (fsStr != null) {
                     val isFs = fsStr == "yes"
-                    if (isFs != lastFullscreenState) {
-                        lastFullscreenState = isFs
+                    if (lastMpvFullscreenState != null && isFs != lastMpvFullscreenState) {
+                        lastMpvFullscreenState = isFs
                         withContext(Dispatchers.Main) {
-                            onFullscreenToggle(isFs)
+                            if (isFs != isFullscreen) {
+                                onToggleFullscreen()
+                            }
                         }
+                    } else if (lastMpvFullscreenState == null) {
+                        lastMpvFullscreenState = isFs
                     }
                 }
 
@@ -194,7 +214,7 @@ fun ComposeMpvPlayer(
                 mpvHandle = handle
 
                 lib.mpv_set_option_string(handle, "osc", "yes")
-                lib.mpv_set_option_string(handle, "vo", "gpu,x11")
+                lib.mpv_set_option_string(handle, "vo", if (isWindows) "gpu" else "gpu,x11")
 
                 val isLinux = !isWindows && System.getProperty("os.name").lowercase().let { it.contains("nix") || it.contains("nux") }
                 if (isLinux) {
@@ -224,9 +244,16 @@ fun ComposeMpvPlayer(
                     lib.mpv_set_option_string(handle, "load-scripts", "yes")
                 }
 
-                val wid = com.sun.jna.Native.getComponentID(this)
-                lib.mpv_set_option_string(handle, "wid", wid.toString())
+                val widRaw = com.sun.jna.Native.getComponentID(this)
+                canvasWidRaw = widRaw
+                val widStr = if (isWindows) {
+                    (widRaw and 0xFFFFFFFFL).toString()
+                } else {
+                    widRaw.toString()
+                }
+                lib.mpv_set_option_string(handle, "wid", widStr)
 
+                lib.mpv_set_option_string(handle, "input-cursor-passthrough", "yes")
                 lib.mpv_set_option_string(handle, "input-default-bindings", "yes")
                 lib.mpv_set_option_string(handle, "input-vo-keyboard", "yes")
                 lib.mpv_set_option_string(handle, "save-position-on-quit", "no")
@@ -282,9 +309,15 @@ fun ComposeMpvPlayer(
                     }
                 }
 
-                lib.mpv_set_option_string(handle, "script-opts", "osc-seekbarkeyframes=yes")
+                lib.mpv_set_option_string(handle, "script-opts", "osc-seekbarkeyframes=yes,osc-visibility=auto")
                 com.lagradost.common.logging.AppLogger.i("Initializing embedded MPV for URL: ${validated.url}")
                 lib.mpv_initialize(handle)
+
+                if (isWindows) {
+                    try {
+                        User32Library.makeTransparent(com.sun.jna.Pointer.createConstant(widRaw))
+                    } catch (_: Throwable) {}
+                }
 
                 val urlTarget = if (validated.useUrlFile) {
                     PlayerLinkHandler.writeUrlListFile("cloudstream_mpv_url_", validated.displayTitle, validated.url).absolutePath
@@ -338,12 +371,22 @@ fun ComposeMpvPlayer(
 
                 // Setup Mouse and Keyboard interactions
                 val canvas = this
+                val getScaledCoords = { e: MouseEvent ->
+                    val scaleX = canvas.graphicsConfiguration?.defaultTransform?.scaleX ?: 1.0
+                    val scaleY = canvas.graphicsConfiguration?.defaultTransform?.scaleY ?: 1.0
+                    val px = (e.x * scaleX).toInt()
+                    val py = (e.y * scaleY).toInt()
+                    px to py
+                }
+
                 canvas.addMouseMotionListener(object : MouseMotionAdapter() {
                     override fun mouseMoved(e: MouseEvent) {
-                        sendMpvCommand(mpvHandle, "mouse ${e.x} ${e.y}", isDisposed, handleLock)
+                        val (px, py) = getScaledCoords(e)
+                        sendMpvCommand(mpvHandle, "mouse $px $py", isDisposed, handleLock)
                     }
                     override fun mouseDragged(e: MouseEvent) {
-                        sendMpvCommand(mpvHandle, "mouse ${e.x} ${e.y}", isDisposed, handleLock)
+                        val (px, py) = getScaledCoords(e)
+                        sendMpvCommand(mpvHandle, "mouse $px $py", isDisposed, handleLock)
                     }
                 })
 
@@ -354,11 +397,12 @@ fun ComposeMpvPlayer(
                         if (e.clickCount == 2 && e.button == MouseEvent.BUTTON1) {
                             val inOscArea = e.y > canvas.height - 130 || e.y < 60
                             if (!inOscArea) {
-                                sendMpvCommand(h, "cycle fullscreen", isDisposed, handleLock)
+                                onToggleFullscreen()
                                 return
                             }
                         }
-                        sendMpvCommand(h, "mouse ${e.x} ${e.y}", isDisposed, handleLock)
+                        val (px, py) = getScaledCoords(e)
+                        sendMpvCommand(h, "mouse $px $py", isDisposed, handleLock)
                         val btn = when (e.button) {
                             MouseEvent.BUTTON1 -> "MBTN_LEFT"
                             MouseEvent.BUTTON2 -> "MBTN_MID"
@@ -392,11 +436,11 @@ fun ComposeMpvPlayer(
                             val mpvKey = awtKeyToMpv(e)
                             if (mpvKey?.contains("QUIT_OVERRIDE") == true) {
                                 onCloseRequest()
-                            } else if (mpvKey == "ENTER") {
-                                sendMpvCommand(h, "cycle fullscreen", isDisposed, handleLock)
+                            } else if (mpvKey == "ENTER" || mpvKey == "f" || mpvKey == "F") {
+                                onToggleFullscreen()
                             } else if (mpvKey == "ESC") {
-                                if (lastFullscreenState) {
-                                    sendMpvCommand(h, "set fullscreen no", isDisposed, handleLock)
+                                if (isFullscreen) {
+                                    onToggleFullscreen()
                                 } else {
                                     onCloseRequest()
                                 }
@@ -405,7 +449,7 @@ fun ComposeMpvPlayer(
                             }
                         } else if (e.id == KeyEvent.KEY_RELEASED) {
                             val mpvKey = awtKeyToMpv(e)
-                            if (mpvKey != null && !mpvKey.contains("QUIT_OVERRIDE") && mpvKey != "ENTER" && mpvKey != "ESC") {
+                            if (mpvKey != null && !mpvKey.contains("QUIT_OVERRIDE") && mpvKey != "ENTER" && mpvKey != "ESC" && mpvKey != "f" && mpvKey != "F") {
                                 sendMpvCommand(h, "keyup $mpvKey", isDisposed, handleLock)
                             }
                         }
