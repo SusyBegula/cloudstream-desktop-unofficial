@@ -3,6 +3,9 @@ package com.lagradost.cloudstream3.desktop.ui.screens.browse
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
@@ -32,8 +35,7 @@ class BrowseViewModel(
 
     // In-memory cache of fetched TMDB API pages: tmdbPage -> List<BrowseTitle>
     private val tmdbCache = ConcurrentHashMap<Int, List<BrowseTitle>>()
-    private var highestFetchedTmdbPage = 0
-    private var totalTmdbPages = 1
+    private var totalTmdbPages = 500
     private var totalTmdbResults = 0
     private var isLoaded = false
     private var pendingPage: Int? = null
@@ -61,8 +63,7 @@ class BrowseViewModel(
         job?.cancel()
         generation++
         tmdbCache.clear()
-        highestFetchedTmdbPage = 0
-        totalTmdbPages = 1
+        totalTmdbPages = 500
         totalTmdbResults = 0
         isLoaded = false
         pendingPage = null
@@ -90,11 +91,6 @@ class BrowseViewModel(
         }
     }
 
-    private fun getAllLoadedTitles(): List<BrowseTitle> {
-        val pages = tmdbCache.keys.sorted()
-        return pages.flatMap { tmdbCache[it].orEmpty() }.distinctBy { it.key }
-    }
-
     fun loadPage(targetPage: Int) {
         val before = state.value
         val pageSize = before.pageSize
@@ -102,19 +98,25 @@ class BrowseViewModel(
         pendingPage = target
         val requestGeneration = ++generation
 
+        val itemsPerApiPage = maxOf(1, tmdbCache[1]?.size ?: 20)
         val startIdx = (target - 1) * pageSize
         val endIdx = target * pageSize
 
-        val allLoaded = getAllLoadedTitles()
+        val startTmdb = ((startIdx / itemsPerApiPage) + 1).coerceIn(1, maxOf(1, totalTmdbPages))
+        val endTmdb = (((endIdx - 1) / itemsPerApiPage) + 1).coerceIn(startTmdb, maxOf(1, totalTmdbPages))
 
-        // If we already have enough items loaded (or reached the end of the TMDB catalog), slice immediately
-        if (isLoaded && (allLoaded.size >= endIdx || (highestFetchedTmdbPage >= totalTmdbPages && highestFetchedTmdbPage > 0))) {
-            val effectiveTotal = if (totalTmdbResults > 0) minOf(totalTmdbResults, totalTmdbPages * 20) else allLoaded.size
+        val missingPages = (startTmdb..endTmdb).filter { !tmdbCache.containsKey(it) }
+
+        // If all needed pages are already in cache, slice immediately
+        if (missingPages.isEmpty() && isLoaded) {
+            val neededTitles = (startTmdb..endTmdb).flatMap { tmdbCache[it].orEmpty() }.distinctBy { it.key }
+            val offset = startIdx - ((startTmdb - 1) * itemsPerApiPage)
+            val pageTitles = neededTitles.drop(maxOf(0, offset)).take(pageSize)
+            pendingPage = null
+
+            val effectiveTotal = if (totalTmdbResults > 0) minOf(totalTmdbResults, totalTmdbPages * itemsPerApiPage) else pageTitles.size
             val totalUiPages = maxOf(1, (effectiveTotal + pageSize - 1) / pageSize)
             val clampedPage = target.coerceAtMost(totalUiPages)
-            val finalStartIdx = (clampedPage - 1) * pageSize
-            val pageTitles = allLoaded.drop(finalStartIdx).take(pageSize)
-            pendingPage = null
 
             mutableState.value = before.copy(
                 titles = pageTitles,
@@ -131,28 +133,33 @@ class BrowseViewModel(
         mutableState.value = before.copy(loading = true, error = null)
         job = scope.launch {
             try {
-                var currentLoaded = getAllLoadedTitles()
-                var nextTmdbPage = highestFetchedTmdbPage + 1
-
-                while (currentLoaded.size < endIdx && nextTmdbPage <= totalTmdbPages && requestGeneration == generation) {
-                    val result = fetch(before.filters, nextTmdbPage)
-                    tmdbCache[result.page] = result.titles
-                    highestFetchedTmdbPage = maxOf(highestFetchedTmdbPage, result.page)
-                    totalTmdbPages = result.totalPages
-                    totalTmdbResults = result.totalResults
-                    currentLoaded = getAllLoadedTitles()
-                    nextTmdbPage = highestFetchedTmdbPage + 1
-                    if (result.titles.isEmpty()) break
+                val fetchedResults = coroutineScope {
+                    missingPages.map { tmdbPage ->
+                        async { fetch(before.filters, tmdbPage) }
+                    }.awaitAll()
                 }
 
                 if (requestGeneration == generation) {
+                    for (res in fetchedResults) {
+                        tmdbCache[res.page] = res.titles
+                        totalTmdbPages = maxOf(1, res.totalPages.coerceIn(1, 500))
+                        totalTmdbResults = res.totalResults
+                    }
                     isLoaded = true
                     pendingPage = null
-                    val effectiveTotal = if (totalTmdbResults > 0) minOf(totalTmdbResults, totalTmdbPages * 20) else currentLoaded.size
+
+                    val updatedItemsPerApiPage = maxOf(1, tmdbCache[1]?.size ?: 20)
+                    val effectiveTotal = if (totalTmdbResults > 0) minOf(totalTmdbResults, totalTmdbPages * updatedItemsPerApiPage) else fetchedResults.flatMap { it.titles }.size
                     val totalUiPages = maxOf(1, (effectiveTotal + pageSize - 1) / pageSize)
                     val clampedPage = target.coerceAtMost(totalUiPages)
+
                     val finalStartIdx = (clampedPage - 1) * pageSize
-                    val pageTitles = currentLoaded.drop(finalStartIdx).take(pageSize)
+                    val finalStartTmdb = ((finalStartIdx / updatedItemsPerApiPage) + 1).coerceIn(1, totalTmdbPages)
+                    val finalEndTmdb = (((finalStartIdx + pageSize - 1) / updatedItemsPerApiPage) + 1).coerceIn(finalStartTmdb, totalTmdbPages)
+
+                    val neededTitles = (finalStartTmdb..finalEndTmdb).flatMap { tmdbCache[it].orEmpty() }.distinctBy { it.key }
+                    val offset = finalStartIdx - ((finalStartTmdb - 1) * updatedItemsPerApiPage)
+                    val pageTitles = neededTitles.drop(maxOf(0, offset)).take(pageSize)
 
                     mutableState.value = before.copy(
                         titles = pageTitles,
