@@ -128,13 +128,13 @@ class BrowseTest {
         try {
             var fail = true
             val requests = mutableListOf<Int>()
-            val vm = BrowseViewModel(scope) { _, page ->
+            val vm = BrowseViewModel(scope, defaultPageSize = 1) { _, page ->
                 requests += page
                 if (page == 2 && fail) {
                     fail = false
                     error("offline")
                 }
-                BrowsePage(if (page == 1) listOf(title(1)) else listOf(title(1), title(2)), page, 2, 2)
+                BrowsePage(listOf(title(page)), page, 2, 2)
             }
             vm.ensureLoaded()
             vm.ensureLoaded()
@@ -144,9 +144,61 @@ class BrowseTest {
             assertEquals(1, vm.state.value.page)
             vm.retry()
             assertNull(vm.state.value.error)
-            assertEquals(listOf(1, 2), vm.state.value.titles.map { it.id })
-            vm.loadMore()
+            assertEquals(listOf(2), vm.state.value.titles.map { it.id })
+            assertEquals(2, vm.state.value.page)
+            vm.prevPage()
+            assertEquals(listOf(1), vm.state.value.titles.map { it.id })
+            assertEquals(1, vm.state.value.page)
+            // Cached page 1 doesn't trigger a new network request
             assertEquals(listOf(1, 2, 2), requests)
+        } finally {
+            scope.cancel()
+        }
+    }
+
+    @Test
+    fun dynamicThreeRowsPaginationSlicesAndCachesCorrectly() {
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
+        try {
+            val requestedPages = mutableListOf<Int>()
+            // TMDB returns 20 items per page
+            val vm = BrowseViewModel(scope, defaultPageSize = 24) { _, page ->
+                requestedPages += page
+                val titles = (1..20).map { title((page - 1) * 20 + it) }
+                BrowsePage(titles, page, 10, 200)
+            }
+            vm.ensureLoaded()
+            // Page 1 with pageSize 24 needs TMDB pages 1 and 2
+            assertEquals(listOf(1, 2), requestedPages)
+            assertEquals(24, vm.state.value.titles.size)
+            assertEquals(1, vm.state.value.page)
+            assertEquals(1, vm.state.value.titles.first().id)
+            assertEquals(24, vm.state.value.titles.last().id)
+
+            // Navigate to page 2 (items 25..48)
+            vm.nextPage()
+            // Needs TMDB page 3 (page 2 was already cached!)
+            assertEquals(listOf(1, 2, 3), requestedPages)
+            assertEquals(24, vm.state.value.titles.size)
+            assertEquals(2, vm.state.value.page)
+            assertEquals(25, vm.state.value.titles.first().id)
+            assertEquals(48, vm.state.value.titles.last().id)
+
+            // Navigate back to page 1
+            vm.prevPage()
+            // No new network requests because pages 1 and 2 are cached!
+            assertEquals(listOf(1, 2, 3), requestedPages)
+            assertEquals(24, vm.state.value.titles.size)
+            assertEquals(1, vm.state.value.page)
+            assertEquals(1, vm.state.value.titles.first().id)
+            assertEquals(24, vm.state.value.titles.last().id)
+
+            // Resizing window: pageSize changes to 18 (e.g. 6 columns * 3 rows)
+            vm.setPageSize(18)
+            assertEquals(18, vm.state.value.titles.size)
+            assertEquals(1, vm.state.value.page)
+            assertEquals(1, vm.state.value.titles.first().id)
+            assertEquals(18, vm.state.value.titles.last().id)
         } finally {
             scope.cancel()
         }
@@ -182,7 +234,7 @@ class BrowseTest {
         try {
             val requests = mutableListOf<BrowseCategory>()
             val models = BrowseCategory.entries.associateWith { category ->
-                BrowseViewModel(scope, initialFilters = BrowseFilters(category = category)) { filters, page ->
+                BrowseViewModel(scope, initialFilters = BrowseFilters(category = category), defaultPageSize = 1) { filters, page ->
                     requests += filters.category
                     BrowsePage(listOf(title(page)), page, 2, 2)
                 }

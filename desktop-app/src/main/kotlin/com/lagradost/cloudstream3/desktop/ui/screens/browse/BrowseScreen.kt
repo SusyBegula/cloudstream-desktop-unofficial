@@ -29,6 +29,7 @@ import com.lagradost.cloudstream3.APIHolder
 import com.lagradost.cloudstream3.MainAPI
 import com.lagradost.cloudstream3.SearchResponse
 import com.lagradost.cloudstream3.desktop.ui.components.DesktopUi
+import com.lagradost.cloudstream3.desktop.ui.components.PaginationControls
 import com.lagradost.cloudstream3.desktop.ui.navigation.NavController
 import com.lagradost.cloudstream3.desktop.ui.navigation.Screen
 import com.lagradost.cloudstream3.desktop.ui.screens.home.HomeViewModel
@@ -85,14 +86,23 @@ fun BrowseScreen(
         previousFilters = filters
     }
 
-    LazyVerticalGrid(
-        columns = GridCells.Adaptive(minSize),
-        state = gridState,
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(bottom = 32.dp),
-        horizontalArrangement = Arrangement.spacedBy(18.dp),
-        verticalArrangement = Arrangement.spacedBy(20.dp),
-    ) {
+    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+        val horizontalSpacing = 18.dp
+        val columns = maxOf(1, ((maxWidth + horizontalSpacing) / (minSize + horizontalSpacing)).toInt())
+        val pageSize = columns * 3
+
+        LaunchedEffect(pageSize) {
+            viewModel.setPageSize(pageSize)
+        }
+
+        LazyVerticalGrid(
+            columns = GridCells.Fixed(columns),
+            state = gridState,
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(bottom = 32.dp),
+            horizontalArrangement = Arrangement.spacedBy(horizontalSpacing),
+            verticalArrangement = Arrangement.spacedBy(20.dp),
+        ) {
         item(span = { GridItemSpan(maxLineSpan) }) {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(categoryPage?.headerTitle ?: "Browser", style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold)
@@ -328,25 +338,45 @@ fun BrowseScreen(
         }
         item(span = { GridItemSpan(maxLineSpan) }) {
             Column(
-                Modifier.fillMaxWidth().padding(24.dp),
+                Modifier.fillMaxWidth().padding(top = 16.dp, bottom = 24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 when {
-                    state.loading -> {
-                        CircularProgressIndicator()
-                        Text("Loading titles…")
-                    }
                     state.error != null -> {
                         Text(state.error!!, color = MaterialTheme.colorScheme.error)
                         Button(onClick = viewModel::retry) { Text("Try again") }
                     }
-                    state.titles.isEmpty() -> {
+                    state.titles.isEmpty() && state.loading -> {
+                        CircularProgressIndicator()
+                        Text("Loading titles…")
+                    }
+                    state.titles.isEmpty() && !state.loading -> {
                         Text("No titles match these filters.", style = MaterialTheme.typography.titleMedium)
                         Text("Try another genre, age rating, year or rating.")
                         OutlinedButton(onClick = { viewModel.setFilters(BrowseFilters(category = filters.category)) }) { Text("Reset filters") }
                     }
-                    state.page < state.totalPages -> OutlinedButton(onClick = viewModel::loadMore) { Text("Load more") }
+                    else -> {
+                        if (state.loading) {
+                            LinearProgressIndicator(
+                                modifier = Modifier.fillMaxWidth(0.3f).padding(bottom = 8.dp),
+                                color = DesktopUi.Accent,
+                            )
+                        }
+                        PaginationControls(
+                            currentPage = state.page,
+                            totalPages = state.totalPages,
+                            totalItems = state.totalResults,
+                            pageSize = state.pageSize,
+                            itemLabel = "titles",
+                            onPageChange = { targetPage ->
+                                viewModel.loadPage(targetPage)
+                                coroutineScope.launch {
+                                    gridState.scrollToItem(0)
+                                }
+                            },
+                        )
+                    }
                 }
             }
         }
@@ -370,6 +400,7 @@ fun BrowseScreen(
                 navController.navigate(Screen.Details(provider, result.url, result.name, result.posterUrl ?: title.poster))
             },
         )
+    }
     }
 }
 
